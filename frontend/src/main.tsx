@@ -34,7 +34,7 @@ const arcTestnet = defineChain({
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <PrivyProvider
-      appId="cmewiuzl900mylc0csry901tg"
+      appId="cmhhuc79100e1kw0ctnh9xyjd"
       config={{
         loginMethods: ['email', 'wallet'],
         appearance: {

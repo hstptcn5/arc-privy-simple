@@ -1,6 +1,6 @@
 // TokenRegistry contract address on Arc Testnet
-// TODO: Deploy TokenRegistry và cập nhật address này
-export const REGISTRY_ADDRESS = ''; // Sẽ được cập nhật sau khi deploy
+// Deployed TokenRegistry address: 0x85667fc0ad255789814B952D73DFe91bd9A58C21
+export const REGISTRY_ADDRESS = '0x85667fc0ad255789814B952D73DFe91bd9A58C21';
 
 // TokenRegistry ABI (minimal - chỉ các functions cần thiết)
 export const REGISTRY_ABI = [

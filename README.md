@@ -2,6 +2,8 @@
 
 > A complete Web3 application for deploying, managing, and trading ERC-20 tokens on Arc Testnet with on-chain token registry.
 
+**Live Demo**: [https://arc-privy-simple-backend.vercel.app/](https://arc-privy-simple-backend.vercel.app/)
+
 ## Project Overview
 
 Arc Pay USDC is a comprehensive Web3 application that enables users to:
@@ -240,7 +242,7 @@ Or use the `frontend/src/DeployRegistry.tsx` component.
 
 ### Privy App ID
 
-Current Privy App ID: `cmewiuzl900mylc0csry901tg`
+Current Privy App ID: `cmhhuc79100e1kw0ctnh9xyjd`
 
 To change, edit `frontend/src/main.tsx`:
 
@@ -319,6 +321,8 @@ arc-payusdc/
 - **On-chain Registry**: All token data stored on-chain, no backend dependency
 
 ## Deploy to Vercel
+
+**Live Application**: [https://arc-privy-simple-backend.vercel.app/](https://arc-privy-simple-backend.vercel.app/)
 
 ### Step-by-Step Guide
 
