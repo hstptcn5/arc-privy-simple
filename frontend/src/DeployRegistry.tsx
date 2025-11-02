@@ -29,14 +29,14 @@ export default function DeployRegistry() {
       const ethersProvider = new ethers.BrowserProvider(provider);
       const signer = await ethersProvider.getSigner();
       
-      console.log('📦 Deploying TokenRegistry...');
+      console.log('Deploying TokenRegistry...');
       const tx = await signer.sendTransaction({
         data: TokenRegistryBytecode,
       });
 
-      console.log(`📝 Transaction submitted: ${tx.hash}`);
+      console.log(`Transaction submitted: ${tx.hash}`);
       const receipt = await tx.wait();
-      console.log(`✅ TokenRegistry deployed at: ${receipt!.contractAddress}`);
+      console.log(`TokenRegistry deployed at: ${receipt!.contractAddress}`);
       
       const contractAddress = receipt!.contractAddress!;
       setDeployedAddress(contractAddress);
@@ -44,7 +44,7 @@ export default function DeployRegistry() {
       localStorage.setItem('registryAddress', contractAddress);
       
     } catch (err: any) {
-      console.error('❌ Error deploying TokenRegistry:', err);
+      console.error('Error deploying TokenRegistry:', err);
       setError(`Failed to deploy TokenRegistry: ${err.message}`);
     } finally {
       setLoading(false);
@@ -60,14 +60,14 @@ export default function DeployRegistry() {
       <div style={{ 
         marginTop: '2rem', 
         padding: '1rem', 
-        background: '#f0f7ff', 
+        background: 'rgba(129, 140, 248, 0.15)', 
         borderRadius: '8px',
-        border: '1px solid #b3d9ff'
+        border: '1px solid rgba(129, 140, 248, 0.3)'
       }}>
-        <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-          ✅ TokenRegistry is configured
+        <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem', color: '#e2e8f0' }}>
+          TokenRegistry is configured
         </div>
-        <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem' }}>
+        <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem' }}>
           {registryAddress}
         </div>
         <button
@@ -77,14 +77,17 @@ export default function DeployRegistry() {
           style={{
             padding: '0.5rem 1rem',
             fontSize: '0.85rem',
-            background: '#e0e0e0',
-            color: '#333',
-            border: 'none',
+            background: 'rgba(71, 85, 105, 0.5)',
+            color: '#e2e8f0',
+            border: '1px solid rgba(71, 85, 105, 0.5)',
             borderRadius: '6px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            transition: 'all 0.2s'
           }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(71, 85, 105, 0.7)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(71, 85, 105, 0.5)'}
         >
-          📋 Copy Address
+          Copy Address
         </button>
       </div>
     );
@@ -94,14 +97,14 @@ export default function DeployRegistry() {
     <div style={{ 
       marginTop: '2rem', 
       padding: '1rem', 
-      background: '#fff3cd', 
+      background: 'rgba(250, 204, 21, 0.15)', 
       borderRadius: '8px',
-      border: '1px solid #ffc107'
+      border: '1px solid rgba(250, 204, 21, 0.3)'
     }}>
-      <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-        📋 Deploy TokenRegistry
+      <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem', color: '#e2e8f0' }}>
+        Deploy TokenRegistry
       </div>
-      <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1rem' }}>
+      <div style={{ fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '1rem' }}>
         Deploy TokenRegistry contract to track all tokens on-chain. This enables marketplace and trading features.
       </div>
       
@@ -109,11 +112,12 @@ export default function DeployRegistry() {
         <div style={{ 
           marginBottom: '1rem', 
           padding: '0.75rem', 
-          background: '#fee',
-          borderLeft: '4px solid #e00',
+          background: 'rgba(239, 68, 68, 0.2)',
+          borderLeft: '4px solid #ef4444',
           borderRadius: '4px',
-          color: '#c00',
-          fontSize: '0.9rem'
+          color: '#fca5a5',
+          fontSize: '0.9rem',
+          border: '1px solid rgba(239, 68, 68, 0.3)'
         }}>
           <strong>Error:</strong> {error}
         </div>
@@ -123,13 +127,14 @@ export default function DeployRegistry() {
         <div style={{ 
           marginBottom: '1rem', 
           padding: '1rem', 
-          background: '#efe',
-          borderLeft: '4px solid #0e0',
+          background: 'rgba(34, 197, 94, 0.2)',
+          borderLeft: '4px solid #22c55e',
           borderRadius: '4px',
-          color: '#0a0'
+          color: '#86efac',
+          border: '1px solid rgba(34, 197, 94, 0.3)'
         }}>
-          <strong>✅ TokenRegistry Deployed Successfully!</strong>
-          <div style={{ marginTop: '0.75rem', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+          <strong>TokenRegistry Deployed Successfully!</strong>
+          <div style={{ marginTop: '0.75rem', fontFamily: 'monospace', fontSize: '0.9rem', color: '#cbd5e1' }}>
             <strong>Address:</strong><br />
             {deployedAddress}
           </div>
@@ -138,12 +143,12 @@ export default function DeployRegistry() {
               href={`https://testnet.arcscan.app/address/${deployedAddress}`}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: '#667eea', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 600 }}
+              style={{ color: '#a78bfa', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 600 }}
             >
               View on Arcscan →
             </a>
           </div>
-          <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
+          <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#cbd5e1' }}>
             This address will be automatically used when deploying tokens below
           </div>
         </div>
@@ -155,7 +160,7 @@ export default function DeployRegistry() {
         style={{ 
           padding: '0.75rem 1.5rem', 
           fontSize: '1rem',
-          background: loading || deployedAddress ? '#ccc' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: loading || deployedAddress ? 'rgba(71, 85, 105, 0.5)' : 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
           color: 'white',
           border: 'none',
           borderRadius: '8px',
@@ -163,7 +168,7 @@ export default function DeployRegistry() {
           fontWeight: 600
         }}
       >
-        {loading ? '🔄 Deploying...' : deployedAddress ? '✅ Deployed' : '🚀 Deploy TokenRegistry'}
+        {loading ? 'Deploying...' : deployedAddress ? 'Deployed' : 'Deploy TokenRegistry'}
       </button>
     </div>
   );

@@ -185,15 +185,15 @@ function App() {
         // Send native USDC
         const amountToSend = ethers.parseUnits(amountNum.toString(), USDC_NATIVE_DECIMALS);
         
-        console.log(`💸 Sending ${amountNum} USDC to ${sendToAddress}...`);
+        console.log(`Sending ${amountNum} USDC to ${sendToAddress}...`);
         const tx = await signer.sendTransaction({
           to: sendToAddress,
           value: amountToSend,
         });
 
-        console.log(`📝 Transaction submitted: ${tx.hash}`);
+        console.log(`Transaction submitted: ${tx.hash}`);
         const receipt = await tx.wait();
-        console.log(`✅ Transaction confirmed!`);
+        console.log(`Transaction confirmed!`);
         
         setResult({ txHash: receipt!.hash });
         setSendToAddress('');
@@ -248,12 +248,12 @@ function App() {
         const contract = new ethers.Contract(tokenAddress, TokenABI, signer);
         const amountWei = ethers.parseUnits(amountNum.toString(), decimals);
         
-        console.log(`💸 Sending ${amountNum} ${tokenSymbol} to ${sendToAddress}...`);
+        console.log(`Sending ${amountNum} ${tokenSymbol} to ${sendToAddress}...`);
         
         const tx = await contract.transfer(sendToAddress, amountWei);
-        console.log(`📝 Transaction submitted: ${tx.hash}`);
+        console.log(`Transaction submitted: ${tx.hash}`);
         const receipt = await tx.wait();
-        console.log(`✅ Transaction confirmed!`);
+        console.log(`Transaction confirmed!`);
 
         setResult({ txHash: receipt!.hash });
         setSendToAddress('');
@@ -268,7 +268,7 @@ function App() {
         }
       }
     } catch (err: any) {
-      console.error('❌ Error sending token:', err);
+      console.error('Error sending token:', err);
       setError(`Failed to send: ${err.message}`);
     } finally {
       setLoading(false);
@@ -369,7 +369,7 @@ function App() {
   // Load token balances
   const loadTokenBalances = useCallback(async (tokens: DeployedToken[]) => {
     if (!embeddedWallet || tokens.length === 0) {
-      console.log('⚠️ Cannot load token balances: no wallet or no tokens');
+      console.log('Cannot load token balances: no wallet or no tokens');
       return;
     }
     
@@ -395,15 +395,15 @@ function App() {
         },
       ];
       
-      console.log(`🔍 Loading balances for ${tokens.length} tokens, wallet address: ${address}`);
+      console.log(`Loading balances for ${tokens.length} tokens, wallet address: ${address}`);
       
       const balances = await Promise.all(
         tokens.map(async (token) => {
           try {
-            console.log(`📊 Fetching balance for token: ${token.name} (${token.symbol}) at ${token.address}`);
+            console.log(`Fetching balance for token: ${token.name} (${token.symbol}) at ${token.address}`);
             
             if (!ethers.isAddress(token.address)) {
-              console.error(`❌ Invalid token address: ${token.address}`);
+              console.error(`Invalid token address: ${token.address}`);
               return { ...token, balance: '0' };
             }
             
@@ -413,14 +413,14 @@ function App() {
             const balance = await contract.balanceOf(address);
             const decimals = await contract.decimals();
             
-            console.log(`✅ Token ${token.symbol}:`);
+            console.log(`Token ${token.symbol}:`);
             console.log(`   - Address: ${address}`);
             console.log(`   - Token Address: ${token.address}`);
             console.log(`   - Raw Balance (BigInt): ${balance.toString()}`);
             console.log(`   - Decimals: ${decimals}`);
             
             if (!balance || balance.toString() === '0') {
-              console.warn(`⚠️ Token ${token.symbol} has zero balance`);
+              console.warn(`Token ${token.symbol} has zero balance`);
               return { ...token, balance: '0' };
             }
             
@@ -444,8 +444,8 @@ function App() {
             
             console.log(`   - Display Balance: ${displayBalance}`);
             return { ...token, balance: displayBalance };
-          } catch (err: any) {
-            console.error(`❌ Error loading balance for ${token.address}:`, err);
+            } catch (err: any) {
+              console.error(`Error loading balance for ${token.address}:`, err);
             console.error(`   Error message: ${err.message}`);
             console.error(`   Error stack: ${err.stack}`);
             return { ...token, balance: 'Error' };
@@ -453,7 +453,7 @@ function App() {
         })
       );
       
-      console.log(`✅ Finished loading balances:`, balances);
+      console.log(`Finished loading balances:`, balances);
       
       setDeployedTokens(balances);
     } catch (err: any) {
@@ -483,7 +483,7 @@ function App() {
           decimals: Number(info.decimals),
         }));
         
-        console.log(`✅ Loaded ${tokens.length} tokens from Registry`);
+        console.log(`Loaded ${tokens.length} tokens from Registry`);
         
         // Immediately load balances for these tokens
         if (tokens.length > 0) {
@@ -512,7 +512,7 @@ function App() {
       try {
         const tokens = JSON.parse(saved);
         setDeployedTokens(tokens);
-        console.log(`✅ Loaded ${tokens.length} tokens from localStorage`);
+        console.log(`Loaded ${tokens.length} tokens from localStorage`);
       } catch (e) {
         console.error('Error loading tokens from localStorage:', e);
       }
@@ -615,12 +615,15 @@ function App() {
     return (
       <div style={{ 
         minHeight: '100vh', 
+        width: '100%',
+        background: '#020617',
+        position: 'relative',
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
         fontFamily: 'system-ui, -apple-system, sans-serif'
       }}>
-        <div>Loading Privy...</div>
+        <div style={{ color: '#e2e8f0' }}>Loading Privy...</div>
       </div>
     );
   }
@@ -630,36 +633,59 @@ function App() {
     return (
       <div style={{ 
         minHeight: '100vh', 
-        padding: '2rem', 
+        width: '100%',
+        background: '#020617',
+        position: 'relative',
+        padding: '2rem',
         fontFamily: 'system-ui, -apple-system, sans-serif',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
       }}>
+        {/* Dark Sphere Grid Background */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 0,
+            background: '#020617',
+            backgroundImage: `
+              linear-gradient(to right, rgba(71,85,105,0.3) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(71,85,105,0.3) 1px, transparent 1px),
+              radial-gradient(circle at 50% 50%, rgba(139,92,246,0.15) 0%, transparent 70%)
+            `,
+            backgroundSize: '32px 32px, 32px 32px, 100% 100%',
+          }}
+        />
+        
         <div style={{
-          background: 'white',
+          position: 'relative',
+          zIndex: 1,
+          background: 'rgba(15, 23, 42, 0.8)',
+          backdropFilter: 'blur(10px)',
           borderRadius: '16px',
           padding: '3rem',
           maxWidth: '600px',
           width: '100%',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          border: '1px solid rgba(71, 85, 105, 0.3)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
           textAlign: 'center'
         }}>
           <h1 style={{ 
             fontSize: '2.5rem', 
             marginBottom: '0.5rem',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
+            backgroundClip: 'text',
+            color: '#fff'
           }}>
             Arc Onboard MVP
           </h1>
           
           <p style={{ 
             fontSize: '1.1rem', 
-            color: '#666', 
+            color: '#cbd5e1', 
             marginBottom: '2rem',
             fontWeight: 300
           }}>
@@ -671,7 +697,7 @@ function App() {
             style={{ 
               padding: '1rem 2rem', 
               fontSize: '1.1rem',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
@@ -683,12 +709,12 @@ function App() {
             onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
           >
-            🔐 Login with Privy
+            Login with Privy
           </button>
 
           <p style={{ 
             fontSize: '0.9rem', 
-            color: '#999', 
+            color: '#94a3b8', 
             marginTop: '1.5rem'
           }}>
             Login with email, Google, or MetaMask
@@ -702,29 +728,50 @@ function App() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      padding: '2rem', 
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center'
+      width: '100%', 
+      background: '#020617',
+      position: 'relative',
+      padding: '2rem',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
     }}>
+      {/* Dark Sphere Grid Background */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 0,
+          background: '#020617',
+          backgroundImage: `
+            linear-gradient(to right, rgba(71,85,105,0.3) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(71,85,105,0.3) 1px, transparent 1px),
+            radial-gradient(circle at 50% 50%, rgba(139,92,246,0.15) 0%, transparent 70%)
+          `,
+          backgroundSize: '32px 32px, 32px 32px, 100% 100%',
+        }}
+      />
+      
       <div style={{
-        background: 'white',
-        borderRadius: '16px',
-        padding: '3rem',
-        maxWidth: '600px',
+        position: 'relative',
+        zIndex: 1,
+        background: 'rgba(15, 23, 42, 0.8)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: '20px',
+        padding: '2.5rem',
+        maxWidth: '1200px',
         width: '100%',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+        margin: '0 auto',
+        border: '1px solid rgba(71, 85, 105, 0.3)',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <h1 style={{ 
             fontSize: '2.5rem', 
             marginBottom: '0.5rem',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
+            backgroundClip: 'text',
+            color: '#fff'
           }}>
             Arc Wallet
           </h1>
@@ -733,11 +780,18 @@ function App() {
             style={{
               padding: '0.5rem 1rem',
               fontSize: '0.9rem',
-              background: '#f0f0f0',
-              color: '#333',
-              border: 'none',
+              background: 'rgba(71, 85, 105, 0.5)',
+              color: '#e2e8f0',
+              border: '1px solid rgba(71, 85, 105, 0.5)',
               borderRadius: '8px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(71, 85, 105, 0.7)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(71, 85, 105, 0.5)';
             }}
           >
             Logout
@@ -747,194 +801,320 @@ function App() {
         {/* Tab Navigation */}
         <div style={{
           display: 'flex',
-          gap: '0.5rem',
+          gap: '0.25rem',
           marginBottom: '2rem',
-          borderBottom: '2px solid #e0e0e0',
-          paddingBottom: '0'
+          borderBottom: '2px solid rgba(71, 85, 105, 0.3)',
+          paddingBottom: '0',
+          overflowX: 'auto',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none'
         }}>
+          <style>{`
+            div::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
           <button
             onClick={() => setActiveTab('balance')}
             style={{
-              padding: '0.75rem 1.5rem',
-              fontSize: '1rem',
+              padding: '1rem 1.5rem',
+              fontSize: '0.95rem',
               fontWeight: 600,
-              background: activeTab === 'balance' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-              color: activeTab === 'balance' ? 'white' : '#666',
+              background: activeTab === 'balance' ? 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)' : 'rgba(30, 41, 59, 0.6)',
+              color: activeTab === 'balance' ? 'white' : '#cbd5e1',
               border: 'none',
-              borderBottom: activeTab === 'balance' ? '3px solid transparent' : '3px solid transparent',
-              borderRadius: '8px 8px 0 0',
+              borderBottom: activeTab === 'balance' ? '3px solid #818cf8' : '3px solid transparent',
+              borderRadius: '12px 12px 0 0',
               cursor: 'pointer',
-              transition: 'all 0.2s'
+              transition: 'all 0.3s ease',
+              whiteSpace: 'nowrap',
+              boxShadow: activeTab === 'balance' ? '0 4px 12px rgba(129, 140, 248, 0.3)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'balance') {
+                e.currentTarget.style.background = 'rgba(51, 65, 85, 0.8)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'balance') {
+                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+              }
             }}
           >
-            💰 Balance
+            Balance
           </button>
           <button
             onClick={() => setActiveTab('send')}
             style={{
-              padding: '0.75rem 1.5rem',
-              fontSize: '1rem',
+              padding: '1rem 1.5rem',
+              fontSize: '0.95rem',
               fontWeight: 600,
-              background: activeTab === 'send' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-              color: activeTab === 'send' ? 'white' : '#666',
+              background: activeTab === 'send' ? 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)' : 'rgba(30, 41, 59, 0.6)',
+              color: activeTab === 'send' ? 'white' : '#cbd5e1',
               border: 'none',
-              borderBottom: activeTab === 'send' ? '3px solid transparent' : '3px solid transparent',
-              borderRadius: '8px 8px 0 0',
+              borderBottom: activeTab === 'send' ? '3px solid #818cf8' : '3px solid transparent',
+              borderRadius: '12px 12px 0 0',
               cursor: 'pointer',
-              transition: 'all 0.2s'
+              transition: 'all 0.3s ease',
+              whiteSpace: 'nowrap',
+              boxShadow: activeTab === 'send' ? '0 4px 12px rgba(129, 140, 248, 0.3)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'send') {
+                e.currentTarget.style.background = 'rgba(51, 65, 85, 0.8)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'send') {
+                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+              }
             }}
           >
-            📤 Send
+            Send
           </button>
           <button
             onClick={() => setActiveTab('deploy')}
             style={{
-              padding: '0.75rem 1.5rem',
-              fontSize: '1rem',
+              padding: '1rem 1.5rem',
+              fontSize: '0.95rem',
               fontWeight: 600,
-              background: activeTab === 'deploy' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-              color: activeTab === 'deploy' ? 'white' : '#666',
+              background: activeTab === 'deploy' ? 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)' : 'rgba(30, 41, 59, 0.6)',
+              color: activeTab === 'deploy' ? 'white' : '#cbd5e1',
               border: 'none',
-              borderBottom: activeTab === 'deploy' ? '3px solid transparent' : '3px solid transparent',
-              borderRadius: '8px 8px 0 0',
+              borderBottom: activeTab === 'deploy' ? '3px solid #818cf8' : '3px solid transparent',
+              borderRadius: '12px 12px 0 0',
               cursor: 'pointer',
-              transition: 'all 0.2s'
+              transition: 'all 0.3s ease',
+              whiteSpace: 'nowrap',
+              boxShadow: activeTab === 'deploy' ? '0 4px 12px rgba(129, 140, 248, 0.3)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'deploy') {
+                e.currentTarget.style.background = 'rgba(51, 65, 85, 0.8)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'deploy') {
+                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+              }
             }}
           >
-            🪙 Deploy
+            Deploy
           </button>
           <button
             onClick={() => setActiveTab('history')}
             style={{
-              padding: '0.75rem 1.5rem',
-              fontSize: '1rem',
+              padding: '1rem 1.5rem',
+              fontSize: '0.95rem',
               fontWeight: 600,
-              background: activeTab === 'history' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-              color: activeTab === 'history' ? 'white' : '#666',
+              background: activeTab === 'history' ? 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)' : 'rgba(30, 41, 59, 0.6)',
+              color: activeTab === 'history' ? 'white' : '#cbd5e1',
               border: 'none',
-              borderBottom: activeTab === 'history' ? '3px solid transparent' : '3px solid transparent',
-              borderRadius: '8px 8px 0 0',
+              borderBottom: activeTab === 'history' ? '3px solid #818cf8' : '3px solid transparent',
+              borderRadius: '12px 12px 0 0',
               cursor: 'pointer',
-              transition: 'all 0.2s'
+              transition: 'all 0.3s ease',
+              whiteSpace: 'nowrap',
+              boxShadow: activeTab === 'history' ? '0 4px 12px rgba(129, 140, 248, 0.3)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'history') {
+                e.currentTarget.style.background = 'rgba(51, 65, 85, 0.8)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'history') {
+                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+              }
             }}
           >
-            📜 History
+            History
           </button>
           <button
             onClick={() => setActiveTab('marketplace')}
             style={{
-              padding: '0.75rem 1.5rem',
-              fontSize: '1rem',
+              padding: '1rem 1.5rem',
+              fontSize: '0.95rem',
               fontWeight: 600,
-              background: activeTab === 'marketplace' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
-              color: activeTab === 'marketplace' ? 'white' : '#666',
+              background: activeTab === 'marketplace' ? 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)' : 'rgba(30, 41, 59, 0.6)',
+              color: activeTab === 'marketplace' ? 'white' : '#cbd5e1',
               border: 'none',
-              borderBottom: activeTab === 'marketplace' ? '3px solid transparent' : '3px solid transparent',
-              borderRadius: '8px 8px 0 0',
+              borderBottom: activeTab === 'marketplace' ? '3px solid #818cf8' : '3px solid transparent',
+              borderRadius: '12px 12px 0 0',
               cursor: 'pointer',
-              transition: 'all 0.2s'
+              transition: 'all 0.3s ease',
+              whiteSpace: 'nowrap',
+              boxShadow: activeTab === 'marketplace' ? '0 4px 12px rgba(129, 140, 248, 0.3)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'marketplace') {
+                e.currentTarget.style.background = 'rgba(51, 65, 85, 0.8)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'marketplace') {
+                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+              }
             }}
           >
-            🏪 Marketplace
+            Marketplace
           </button>
         </div>
 
         {/* Tab Content */}
         {activeTab === 'balance' && embeddedWallet && (
           <div style={{ 
-            padding: '1rem', 
-            background: '#f8f9fa',
-            borderRadius: '8px'
+            padding: '2rem', 
+            background: 'rgba(15, 23, 42, 0.4)',
+            borderRadius: '16px',
+            minHeight: '400px',
+            border: '1px solid rgba(71, 85, 105, 0.2)'
           }}>
-            <div style={{ marginBottom: '0.5rem', fontSize: '0.9rem', color: '#666' }}>
-              Wallet Address:
-            </div>
             <div style={{ 
-              fontFamily: 'monospace', 
-              fontSize: '0.85rem',
-              wordBreak: 'break-all',
-              marginBottom: '0.5rem'
+              padding: '1.5rem', 
+              background: 'rgba(30, 41, 59, 0.6)', 
+              borderRadius: '12px',
+              marginBottom: '2rem',
+              border: '1px solid rgba(71, 85, 105, 0.3)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
             }}>
-              {embeddedWallet.address}
+              <div style={{ marginBottom: '1rem', fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Wallet Address
+              </div>
+              <div style={{ 
+                fontFamily: 'monospace', 
+                fontSize: '0.95rem',
+                wordBreak: 'break-all',
+                marginBottom: '1rem',
+                color: '#e2e8f0',
+                fontWeight: 500
+              }}>
+                {embeddedWallet.address}
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(embeddedWallet.address);
+                  setError('');
+                  setTimeout(() => setError(''), 100);
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.85rem',
+                  background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  transition: 'transform 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                Copy Address
+              </button>
             </div>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(embeddedWallet.address);
-                setError('');
-                setTimeout(() => setError(''), 100);
-              }}
-              style={{
-                padding: '0.25rem 0.5rem',
-                fontSize: '0.75rem',
-                background: '#e0e0e0',
-                color: '#333',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                marginBottom: '1.5rem'
-              }}
-            >
-              📋 Copy Address
-            </button>
             
-            <div style={{ marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-                Balance: {balance ? `${balance} USDC` : 'Loading...'}
+            <div style={{ 
+              padding: '1.5rem', 
+              background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
+              borderRadius: '12px',
+              marginBottom: '2rem',
+              boxShadow: '0 4px 16px rgba(129, 140, 248, 0.3)'
+            }}>
+              <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                USDC Balance
+              </div>
+              <div style={{ fontSize: '2rem', fontWeight: 700, color: 'white' }}>
+                {balance ? `${balance} USDC` : 'Loading...'}
               </div>
             </div>
             
             {deployedTokens.length > 0 && (
-              <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #ddd' }}>
+              <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(71, 85, 105, 0.3)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <div style={{ fontSize: '0.9rem', color: '#666', fontWeight: 600 }}>
+                  <div style={{ fontSize: '0.9rem', color: '#cbd5e1', fontWeight: 600 }}>
                     Your Tokens:
                   </div>
                   <button
                     onClick={() => {
-                      console.log('🔄 Manual refresh balances...');
+                      console.log('Manual refresh balances...');
                       loadTokenBalances(deployedTokens);
                     }}
                     style={{
                       padding: '0.25rem 0.5rem',
                       fontSize: '0.75rem',
-                      background: '#667eea',
+                      background: '#818cf8',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
                     }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#a78bfa'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#818cf8'}
                   >
-                    🔄 Refresh
+                    Refresh
                   </button>
                 </div>
-                {deployedTokens.map((token, idx) => (
-                  <div 
-                    key={token.address} 
-                    style={{ 
-                      padding: '0.5rem', 
-                      marginBottom: '0.5rem',
-                      background: '#fff',
-                      borderRadius: '6px',
-                      border: '1px solid #e0e0e0'
-                    }}
-                  >
-                    <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>
-                      {token.name} ({token.symbol})
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
+                  gap: '1rem' 
+                }}>
+                  {deployedTokens.map((token, idx) => (
+                    <div 
+                      key={token.address} 
+                      style={{ 
+                        padding: '1.25rem', 
+                        background: 'rgba(30, 41, 59, 0.6)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(71, 85, 105, 0.3)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                        transition: 'all 0.2s',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(129, 140, 248, 0.3)';
+                        e.currentTarget.style.borderColor = 'rgba(129, 140, 248, 0.5)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+                        e.currentTarget.style.borderColor = 'rgba(71, 85, 105, 0.3)';
+                      }}
+                    >
+                      <div style={{ fontSize: '1rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '0.5rem' }}>
+                        {token.name}
+                      </div>
+                      <div style={{ fontSize: '0.9rem', color: '#a78bfa', fontWeight: 600, marginBottom: '0.75rem' }}>
+                        {token.symbol}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'monospace', marginBottom: '0.75rem', padding: '0.5rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '6px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
+                        {token.address.slice(0, 8)}...{token.address.slice(-6)}
+                      </div>
+                      <div style={{ 
+                        fontSize: '1.25rem', 
+                        fontWeight: 700, 
+                        color: '#a78bfa',
+                        padding: '0.75rem',
+                        background: 'rgba(129, 140, 248, 0.15)',
+                        borderRadius: '8px',
+                        textAlign: 'center',
+                        border: '1px solid rgba(129, 140, 248, 0.2)'
+                      }}>
+                        {token.balance !== undefined && token.balance !== 'Error' ? (
+                          `${token.balance} ${token.symbol}`
+                        ) : token.balance === 'Error' ? (
+                          <span style={{ color: '#f87171', fontSize: '0.9rem' }}>Error loading</span>
+                        ) : (
+                          'Loading...'
+                        )}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '0.85rem', color: '#666', fontFamily: 'monospace', marginTop: '0.25rem' }}>
-                      {token.address.slice(0, 6)}...{token.address.slice(-4)}
-                    </div>
-                    <div style={{ fontSize: '1rem', fontWeight: 600, color: '#667eea', marginTop: '0.25rem' }}>
-                      {token.balance !== undefined && token.balance !== 'Error' ? (
-                        `${token.balance} ${token.symbol}`
-                      ) : token.balance === 'Error' ? (
-                        <span style={{ color: '#e00', fontSize: '0.85rem' }}>Error loading balance</span>
-                      ) : (
-                        'Loading...'
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
             
@@ -946,7 +1126,7 @@ function App() {
                 display: 'inline-block',
                 padding: '0.5rem 1rem',
                 fontSize: '0.9rem',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
@@ -959,16 +1139,16 @@ function App() {
               onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
               onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
             >
-              🚰 Get USDC from Faucet
+              Get USDC from Faucet
             </a>
           </div>
         )}
 
         {activeTab === 'send' && (
-          <div>
+          <div style={{ padding: '2rem', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
             {/* Token Selection */}
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem', fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
                 Select Token:
               </label>
               <select
@@ -985,10 +1165,11 @@ function App() {
                   width: '100%',
                   padding: '0.75rem',
                   fontSize: '1rem',
-                  border: '2px solid #e0e0e0',
+                  border: '2px solid rgba(71, 85, 105, 0.5)',
                   borderRadius: '8px',
                   outline: 'none',
-                  background: 'white'
+                  background: 'rgba(30, 41, 59, 0.6)',
+                  color: '#e2e8f0'
                 }}
               >
                 <option value="usdc">USDC (Native)</option>
@@ -1004,7 +1185,7 @@ function App() {
             {/* Custom Token Address Input */}
             {selectedToken === 'custom' && (
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem', fontWeight: 600 }}>
+                <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
                   Token Contract Address:
                 </label>
                 <input
@@ -1026,15 +1207,17 @@ function App() {
                     padding: '0.75rem',
                     fontSize: '0.9rem',
                     fontFamily: 'monospace',
-                    border: '2px solid #e0e0e0',
+                    border: '2px solid rgba(71, 85, 105, 0.5)',
                     borderRadius: '8px',
-                    outline: 'none'
+                    outline: 'none',
+                    background: 'rgba(30, 41, 59, 0.6)',
+                    color: '#e2e8f0'
                   }}
                 />
                 {customTokenInfo && (
-                  <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: '#f0f7ff', borderRadius: '6px', fontSize: '0.85rem' }}>
-                    <div><strong>{customTokenInfo.name}</strong> ({customTokenInfo.symbol})</div>
-                    <div style={{ color: '#666', marginTop: '0.25rem' }}>
+                  <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(129, 140, 248, 0.15)', borderRadius: '6px', fontSize: '0.85rem', border: '1px solid rgba(129, 140, 248, 0.2)' }}>
+                    <div style={{ color: '#e2e8f0' }}><strong>{customTokenInfo.name}</strong> ({customTokenInfo.symbol})</div>
+                    <div style={{ color: '#cbd5e1', marginTop: '0.25rem' }}>
                       Your Balance: {customTokenBalance || '0'} {customTokenInfo.symbol}
                     </div>
                   </div>
@@ -1044,7 +1227,7 @@ function App() {
 
             {/* Recipient Address */}
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem', fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
                 Recipient Address:
               </label>
               <input
@@ -1057,16 +1240,18 @@ function App() {
                   width: '100%',
                   padding: '0.75rem',
                   fontSize: '1rem',
-                  border: '2px solid #e0e0e0',
+                  border: '2px solid rgba(71, 85, 105, 0.5)',
                   borderRadius: '8px',
-                  outline: 'none'
+                  outline: 'none',
+                  background: 'rgba(30, 41, 59, 0.6)',
+                  color: '#e2e8f0'
                 }}
               />
             </div>
           
             {/* Amount Input */}
             <div style={{ position: 'relative', marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem', fontWeight: 600 }}>
+              <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
                 Amount:
               </label>
               <input
@@ -1082,16 +1267,18 @@ function App() {
                   padding: '0.75rem',
                   paddingRight: '4rem',
                   fontSize: '1rem',
-                  border: '2px solid #e0e0e0',
+                  border: '2px solid rgba(71, 85, 105, 0.5)',
                   borderRadius: '8px',
-                  outline: 'none'
+                  outline: 'none',
+                  background: 'rgba(30, 41, 59, 0.6)',
+                  color: '#e2e8f0'
                 }}
               />
               <span style={{
                 position: 'absolute',
                 right: '1rem',
                 top: '2.5rem',
-                color: '#999',
+                color: '#94a3b8',
                 fontSize: '0.9rem',
                 fontWeight: 600
               }}>
@@ -1107,12 +1294,12 @@ function App() {
 
             {/* Balance Display */}
             {selectedToken === 'usdc' && balance && (
-              <div style={{ marginBottom: '1rem', fontSize: '0.85rem', color: '#666' }}>
+              <div style={{ marginBottom: '1rem', fontSize: '0.85rem', color: '#cbd5e1' }}>
                 Your Balance: {balance} USDC
               </div>
             )}
             {selectedToken !== 'usdc' && selectedToken !== 'custom' && (
-              <div style={{ marginBottom: '1rem', fontSize: '0.85rem', color: '#666' }}>
+              <div style={{ marginBottom: '1rem', fontSize: '0.85rem', color: '#cbd5e1' }}>
                 Your Balance: {deployedTokens.find(t => t.address === selectedToken)?.balance || '0'} {deployedTokens.find(t => t.address === selectedToken)?.symbol || ''}
               </div>
             )}
@@ -1123,7 +1310,7 @@ function App() {
               style={{ 
                 padding: '1rem 2rem', 
                 fontSize: '1.1rem',
-                background: (loading || (selectedToken === 'custom' && !customTokenInfo)) ? '#ccc' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: (loading || (selectedToken === 'custom' && !customTokenInfo)) ? 'rgba(71, 85, 105, 0.5)' : 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
@@ -1136,7 +1323,7 @@ function App() {
               onMouseEnter={(e) => !loading && !(selectedToken === 'custom' && !customTokenInfo) && (e.currentTarget.style.transform = 'scale(1.02)')}
               onMouseLeave={(e) => !loading && (e.currentTarget.style.transform = 'scale(1)')}
             >
-              {loading ? '🔄 Sending...' : `💰 Send ${selectedToken === 'usdc' 
+              {loading ? 'Sending...' : `Send ${selectedToken === 'usdc' 
                 ? 'USDC' 
                 : selectedToken === 'custom' && customTokenInfo
                   ? customTokenInfo.symbol
@@ -1149,10 +1336,11 @@ function App() {
               <div style={{ 
                 marginTop: '1rem', 
                 padding: '1rem', 
-                background: '#fee',
-                borderLeft: '4px solid #e00',
+                background: 'rgba(239, 68, 68, 0.2)',
+                borderLeft: '4px solid #ef4444',
                 borderRadius: '4px',
-                color: '#c00'
+                color: '#fca5a5',
+                border: '1px solid rgba(239, 68, 68, 0.3)'
               }}>
                 <strong>Error:</strong> {error}
               </div>
@@ -1162,18 +1350,19 @@ function App() {
               <div style={{ 
                 marginTop: '1rem', 
                 padding: '1rem', 
-                background: '#efe',
-                borderLeft: '4px solid #0e0',
+                background: 'rgba(34, 197, 94, 0.2)',
+                borderLeft: '4px solid #22c55e',
                 borderRadius: '4px',
-                color: '#0a0'
+                color: '#86efac',
+                border: '1px solid rgba(34, 197, 94, 0.3)'
               }}>
-                <strong>✅ Success!</strong>
+                <strong>Success!</strong>
                 <div style={{ marginTop: '0.5rem' }}>
                   <a 
                     href={`https://testnet.arcscan.app/tx/${result.txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ color: '#667eea', textDecoration: 'none' }}
+                    style={{ color: '#a78bfa', textDecoration: 'none' }}
                   >
                     View on Arcscan →
                   </a>
@@ -1191,16 +1380,16 @@ function App() {
         )}
 
         {activeTab === 'history' && embeddedWallet && (
-          <div>
+          <div style={{ padding: '2rem', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Transaction History</h2>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0' }}>Transaction History</h2>
               <button
                 onClick={() => loadTransactionHistory()}
                 disabled={loadingHistory}
                 style={{
                   padding: '0.5rem 1rem',
                   fontSize: '0.85rem',
-                  background: loadingHistory ? '#ccc' : '#667eea',
+                  background: loadingHistory ? 'rgba(71, 85, 105, 0.5)' : 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
@@ -1208,16 +1397,16 @@ function App() {
                   fontWeight: 600
                 }}
               >
-                {loadingHistory ? '🔄 Loading...' : '🔄 Refresh'}
+                {loadingHistory ? 'Loading...' : 'Refresh'}
               </button>
             </div>
 
             {loadingHistory ? (
-              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#cbd5e1' }}>
                 Loading transaction history...
               </div>
             ) : transactions.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#cbd5e1' }}>
                 No transactions found
               </div>
             ) : (
@@ -1228,9 +1417,9 @@ function App() {
                     style={{
                       padding: '1rem',
                       marginBottom: '0.75rem',
-                      background: '#f8f9fa',
+                      background: 'rgba(30, 41, 59, 0.6)',
                       borderRadius: '8px',
-                      border: '1px solid #e0e0e0'
+                      border: '1px solid rgba(71, 85, 105, 0.3)'
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
@@ -1238,12 +1427,12 @@ function App() {
                         <div style={{ 
                           fontSize: '0.9rem', 
                           fontWeight: 600,
-                          color: tx.type === 'sent' ? '#e74c3c' : '#27ae60',
+                          color: tx.type === 'sent' ? '#f87171' : '#86efac',
                           marginBottom: '0.25rem'
                         }}>
-                          {tx.type === 'sent' ? '📤 Sent' : '📥 Received'}
+                          {tx.type === 'sent' ? 'Sent' : 'Received'}
                         </div>
-                        <div style={{ fontSize: '0.85rem', color: '#666', fontFamily: 'monospace', marginTop: '0.25rem' }}>
+                        <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '0.25rem' }}>
                           {tx.type === 'sent' ? (
                             <>To: {tx.to.slice(0, 6)}...{tx.to.slice(-4)}</>
                           ) : (
@@ -1252,10 +1441,10 @@ function App() {
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1rem', fontWeight: 600, color: '#667eea' }}>
+                        <div style={{ fontSize: '1rem', fontWeight: 600, color: '#a78bfa' }}>
                           {parseFloat(tx.value) > 0 ? `${parseFloat(tx.value).toFixed(6)} USDC` : 'Token Transfer'}
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '0.25rem' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.25rem' }}>
                           {new Date(tx.timestamp * 1000).toLocaleString()}
                         </div>
                       </div>
@@ -1266,7 +1455,7 @@ function App() {
                       rel="noopener noreferrer"
                       style={{
                         fontSize: '0.85rem',
-                        color: '#667eea',
+                        color: '#a78bfa',
                         textDecoration: 'none',
                         fontFamily: 'monospace'
                       }}
@@ -1281,16 +1470,16 @@ function App() {
         )}
 
         {activeTab === 'marketplace' && embeddedWallet && (
-          <div>
+          <div style={{ padding: '2rem', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Token Marketplace</h2>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0' }}>Token Marketplace</h2>
               <button
                 onClick={() => loadAllTokens()}
                 disabled={loadingMarketplace}
                 style={{
                   padding: '0.5rem 1rem',
                   fontSize: '0.85rem',
-                  background: loadingMarketplace ? '#ccc' : '#667eea',
+                  background: loadingMarketplace ? 'rgba(71, 85, 105, 0.5)' : 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
@@ -1298,7 +1487,7 @@ function App() {
                   fontWeight: 600
                 }}
               >
-                {loadingMarketplace ? '🔄 Loading...' : '🔄 Refresh'}
+                {loadingMarketplace ? 'Loading...' : 'Refresh'}
               </button>
             </div>
 
@@ -1312,23 +1501,30 @@ function App() {
                   width: '100%',
                   padding: '0.75rem',
                   fontSize: '1rem',
-                  border: '2px solid #e0e0e0',
+                  border: '2px solid rgba(71, 85, 105, 0.5)',
                   borderRadius: '8px',
-                  outline: 'none'
+                  outline: 'none',
+                  background: 'rgba(30, 41, 59, 0.6)',
+                  color: '#e2e8f0'
                 }}
               />
             </div>
 
             {loadingMarketplace ? (
-              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+              <div style={{ textAlign: 'center', padding: '4rem', color: '#cbd5e1', fontSize: '1.1rem' }}>
                 Loading tokens...
               </div>
             ) : allTokens.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
-                No tokens found in Registry. Deploy a TokenRegistry first!
+              <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem', color: '#cbd5e1' }}>No tokens found</div>
+                <div style={{ fontSize: '0.9rem' }}>Deploy a TokenRegistry first to start tracking tokens!</div>
               </div>
             ) : (
-              <div>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
+                gap: '1.25rem' 
+              }}>
                 {allTokens
                   .filter((token) => {
                     if (!marketplaceSearch) return true;
@@ -1341,64 +1537,94 @@ function App() {
                     <div
                       key={token.address}
                       style={{
-                        padding: '1rem',
-                        marginBottom: '0.75rem',
-                        background: token.isOwned ? '#f0f7ff' : '#f8f9fa',
-                        borderRadius: '8px',
-                        border: `1px solid ${token.isOwned ? '#667eea' : '#e0e0e0'}`
+                        padding: '1.5rem',
+                        background: token.isOwned ? 'rgba(129, 140, 248, 0.15)' : 'rgba(30, 41, 59, 0.6)',
+                        borderRadius: '16px',
+                        border: `2px solid ${token.isOwned ? 'rgba(129, 140, 248, 0.5)' : 'rgba(71, 85, 105, 0.3)'}`,
+                        boxShadow: token.isOwned ? '0 4px 16px rgba(129, 140, 248, 0.3)' : '0 2px 8px rgba(0,0,0,0.2)',
+                        transition: 'all 0.3s ease',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-4px)';
+                        e.currentTarget.style.boxShadow = token.isOwned 
+                          ? '0 8px 24px rgba(129, 140, 248, 0.4)' 
+                          : '0 4px 16px rgba(0,0,0,0.3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = token.isOwned 
+                          ? '0 4px 16px rgba(129, 140, 248, 0.3)' 
+                          : '0 2px 8px rgba(0,0,0,0.2)';
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                            <div style={{ fontSize: '1rem', fontWeight: 600 }}>
-                              {token.name} ({token.symbol})
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#e2e8f0' }}>
+                              {token.name}
                             </div>
                             {token.isOwned && (
                               <span style={{ 
                                 fontSize: '0.75rem', 
-                                background: '#667eea', 
+                                background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
                                 color: 'white', 
-                                padding: '0.15rem 0.5rem', 
+                                padding: '0.25rem 0.75rem', 
                                 borderRadius: '12px',
-                                fontWeight: 600
+                                fontWeight: 700,
+                                boxShadow: '0 2px 8px rgba(129, 140, 248, 0.3)'
                               }}>
                                 Your Token
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: '0.85rem', color: '#666', fontFamily: 'monospace', marginBottom: '0.25rem' }}>
-                            {token.address.slice(0, 8)}...{token.address.slice(-6)}
+                          <div style={{ fontSize: '1rem', color: '#a78bfa', fontWeight: 700, marginBottom: '1rem' }}>
+                            {token.symbol}
                           </div>
-                          <div style={{ fontSize: '0.85rem', color: '#999', marginBottom: '0.25rem' }}>
-                            Deployer: {token.deployer.slice(0, 6)}...{token.deployer.slice(-4)}
+                          <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontFamily: 'monospace', marginBottom: '0.5rem', padding: '0.5rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '8px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
+                            {token.address.slice(0, 10)}...{token.address.slice(-8)}
                           </div>
-                          <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                            Initial Supply: {ethers.formatUnits(token.initialSupply, token.decimals)} {token.symbol}
+                          <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '0.5rem' }}>
+                            <strong>Deployer:</strong> {token.deployer.slice(0, 8)}...{token.deployer.slice(-6)}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '0.25rem' }}>
-                            Deployed: {new Date(token.deployTimestamp * 1000).toLocaleString()}
+                          <div style={{ fontSize: '0.9rem', color: '#e2e8f0', fontWeight: 600, marginBottom: '0.5rem', padding: '0.5rem', background: 'rgba(129, 140, 248, 0.15)', borderRadius: '8px', border: '1px solid rgba(129, 140, 248, 0.2)' }}>
+                            Supply: {ethers.formatUnits(token.initialSupply, token.decimals)} {token.symbol}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                            Deployed: {new Date(token.deployTimestamp * 1000).toLocaleDateString()} {new Date(token.deployTimestamp * 1000).toLocaleTimeString()}
                           </div>
                         </div>
-                        <div style={{ marginLeft: '1rem' }}>
-                          <a
-                            href={`https://testnet.arcscan.app/address/${token.address}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              display: 'inline-block',
-                              padding: '0.5rem 1rem',
-                              fontSize: '0.85rem',
-                              background: '#667eea',
-                              color: 'white',
-                              textDecoration: 'none',
-                              borderRadius: '6px',
-                              fontWeight: 600
-                            }}
-                          >
-                            View →
-                          </a>
-                        </div>
+                      </div>
+                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(71, 85, 105, 0.3)' }}>
+                        <a
+                          href={`https://testnet.arcscan.app/address/${token.address}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-block',
+                            width: '100%',
+                            textAlign: 'center',
+                            padding: '0.75rem 1rem',
+                            fontSize: '0.9rem',
+                            background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
+                            color: 'white',
+                            textDecoration: 'none',
+                            borderRadius: '10px',
+                            fontWeight: 700,
+                            boxShadow: '0 4px 12px rgba(129, 140, 248, 0.3)',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.05)';
+                            e.currentTarget.style.boxShadow = '0 6px 16px rgba(129, 140, 248, 0.4)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(129, 140, 248, 0.3)';
+                          }}
+                        >
+                          View on Arcscan →
+                        </a>
                       </div>
                     </div>
                   ))}
@@ -1409,8 +1635,14 @@ function App() {
                          token.symbol.toLowerCase().includes(search) ||
                          token.address.toLowerCase().includes(search);
                 }).length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
-                    No tokens match your search
+                  <div style={{ 
+                    gridColumn: '1 / -1',
+                    textAlign: 'center', 
+                    padding: '4rem', 
+                    color: '#94a3b8' 
+                  }}>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem', color: '#cbd5e1' }}>No tokens match your search</div>
+                    <div style={{ fontSize: '0.9rem' }}>Try a different keyword</div>
                   </div>
                 )}
               </div>
@@ -1421,18 +1653,18 @@ function App() {
         <div style={{ 
           marginTop: '2rem', 
           paddingTop: '2rem', 
-          borderTop: '1px solid #eee',
+          borderTop: '1px solid rgba(71, 85, 105, 0.3)',
           fontSize: '0.9rem',
-          color: '#999'
+          color: '#94a3b8'
         }}>
-          <p style={{ margin: '0.5rem 0' }}>
-            ⚡ Built on Arc Testnet with Privy
+          <p style={{ margin: '0.5rem 0', color: '#94a3b8' }}>
+            Built on Arc Testnet with Privy
           </p>
-          <p style={{ margin: '0.5rem 0' }}>
-            🔐 Powered by Embedded Wallets
+          <p style={{ margin: '0.5rem 0', color: '#94a3b8' }}>
+            Powered by Embedded Wallets
           </p>
-          <p style={{ margin: '0.5rem 0' }}>
-            💸 Zero gas for users, instant finality
+          <p style={{ margin: '0.5rem 0', color: '#94a3b8' }}>
+            Zero gas for users, instant finality
           </p>
         </div>
       </div>

@@ -97,14 +97,14 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
       // Combine bytecode with encoded params
       const deploymentBytecode = SimpleTokenBytecode + encodedParams.slice(2);
       
-      console.log('📦 Deploying token...');
+      console.log('Deploying token...');
       const tx = await signer.sendTransaction({
         data: deploymentBytecode,
       });
 
-      console.log(`📝 Transaction submitted: ${tx.hash}`);
+      console.log(`Transaction submitted: ${tx.hash}`);
       const receipt = await tx.wait();
-      console.log(`✅ Contract deployed at: ${receipt!.contractAddress}`);
+      console.log(`Contract deployed at: ${receipt!.contractAddress}`);
       
       const contractAddress = receipt!.contractAddress!;
       setDeployedAddress(contractAddress);
@@ -133,7 +133,7 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
         }
         
         setTokenBalance(formattedBalance);
-        console.log(`💰 Token balance: ${formattedBalance} ${tokenSymbol}`);
+        console.log(`Token balance: ${formattedBalance} ${tokenSymbol}`);
       } catch (balanceErr) {
         console.error('Error checking balance:', balanceErr);
         // Continue even if balance check fails
@@ -142,7 +142,7 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
       // Register token in Registry if registry address is provided
       if (registryAddress && ethers.isAddress(registryAddress)) {
         try {
-          console.log('📝 Registering token in Registry...');
+          console.log('Registering token in Registry...');
           const registry = new ethers.Contract(registryAddress, REGISTRY_ABI, signer);
           const initialSupplyWei = ethers.parseUnits(initialSupplyNum.toString(), decimalsNum);
           const registerTx = await registry.registerToken(
@@ -153,20 +153,20 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
             initialSupplyWei
           );
           await registerTx.wait();
-          console.log('✅ Token registered in Registry!');
+          console.log('Token registered in Registry!');
         } catch (regErr: any) {
-          console.error('⚠️ Failed to register in Registry:', regErr);
+          console.error('Failed to register in Registry:', regErr);
           // Continue even if registration fails - token is still deployed
         }
       } else {
-        console.log('⚠️ No Registry address - token deployed but not registered');
+        console.log('No Registry address - token deployed but not registered');
       }
       
       if (onDeploySuccess) {
         onDeploySuccess(contractAddress, receipt!.hash, tokenName, tokenSymbol, decimalsNum);
       }
     } catch (err: any) {
-      console.error('❌ Error deploying token:', err);
+      console.error('Error deploying token:', err);
       setError(`Failed to deploy token: ${err.message}`);
     } finally {
       setLoading(false);
@@ -182,17 +182,17 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
   }
 
   return (
-    <div style={{ marginTop: '2rem', paddingTop: '2rem', borderTop: '1px solid #eee' }}>
-      <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Deploy Custom Token</h2>
+    <div style={{ marginTop: '2rem', paddingTop: '2rem', borderTop: '1px solid rgba(71, 85, 105, 0.3)' }}>
+      <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#e2e8f0' }}>Deploy Custom Token</h2>
       
       <div style={{ 
         marginBottom: '1rem', 
         padding: '0.75rem', 
-        background: '#f0f7ff', 
+        background: 'rgba(129, 140, 248, 0.15)', 
         borderRadius: '8px',
-        border: '1px solid #b3d9ff'
+        border: '1px solid rgba(129, 140, 248, 0.3)'
       }}>
-        <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem', fontWeight: 600 }}>
+        <div style={{ fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
           TokenRegistry Address (optional):
         </div>
         <input
@@ -210,13 +210,15 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
             width: '100%',
             padding: '0.5rem',
             fontSize: '0.9rem',
-            border: '2px solid #e0e0e0',
+            border: '2px solid rgba(71, 85, 105, 0.5)',
             borderRadius: '6px',
             fontFamily: 'monospace',
-            outline: 'none'
+            outline: 'none',
+            background: 'rgba(30, 41, 59, 0.6)',
+            color: '#e2e8f0'
           }}
         />
-        <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '0.25rem' }}>
+        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.25rem' }}>
           If provided, token will be automatically registered in the Registry for on-chain tracking
         </div>
       </div>
@@ -232,10 +234,12 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
             width: '100%',
             padding: '0.75rem',
             fontSize: '1rem',
-            border: '2px solid #e0e0e0',
+            border: '2px solid rgba(71, 85, 105, 0.5)',
             borderRadius: '8px',
             marginBottom: '0.75rem',
-            outline: 'none'
+            outline: 'none',
+            background: 'rgba(30, 41, 59, 0.6)',
+            color: '#e2e8f0'
           }}
         />
         
@@ -249,10 +253,12 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
             width: '100%',
             padding: '0.75rem',
             fontSize: '1rem',
-            border: '2px solid #e0e0e0',
+            border: '2px solid rgba(71, 85, 105, 0.5)',
             borderRadius: '8px',
             marginBottom: '0.75rem',
-            outline: 'none'
+            outline: 'none',
+            background: 'rgba(30, 41, 59, 0.6)',
+            color: '#e2e8f0'
           }}
         />
         
@@ -268,10 +274,12 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
             width: '100%',
             padding: '0.75rem',
             fontSize: '1rem',
-            border: '2px solid #e0e0e0',
+            border: '2px solid rgba(71, 85, 105, 0.5)',
             borderRadius: '8px',
             marginBottom: '0.75rem',
-            outline: 'none'
+            outline: 'none',
+            background: 'rgba(30, 41, 59, 0.6)',
+            color: '#e2e8f0'
           }}
         />
         
@@ -287,10 +295,12 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
             width: '100%',
             padding: '0.75rem',
             fontSize: '1rem',
-            border: '2px solid #e0e0e0',
+            border: '2px solid rgba(71, 85, 105, 0.5)',
             borderRadius: '8px',
             marginBottom: '0.75rem',
-            outline: 'none'
+            outline: 'none',
+            background: 'rgba(30, 41, 59, 0.6)',
+            color: '#e2e8f0'
           }}
         />
       </div>
@@ -301,7 +311,7 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
         style={{ 
           padding: '1rem 2rem', 
           fontSize: '1.1rem',
-          background: loading ? '#ccc' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          background: loading ? 'rgba(71, 85, 105, 0.5)' : 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
           color: 'white',
           border: 'none',
           borderRadius: '8px',
@@ -314,17 +324,18 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
         onMouseEnter={(e) => !loading && (e.currentTarget.style.transform = 'scale(1.02)')}
         onMouseLeave={(e) => !loading && (e.currentTarget.style.transform = 'scale(1)')}
       >
-        {loading ? '🔄 Deploying...' : '🚀 Deploy Token'}
+        {loading ? 'Deploying...' : 'Deploy Token'}
       </button>
 
       {error && (
         <div style={{ 
           marginTop: '1rem', 
           padding: '1rem', 
-          background: '#fee',
-          borderLeft: '4px solid #e00',
+          background: 'rgba(239, 68, 68, 0.2)',
+          borderLeft: '4px solid #ef4444',
           borderRadius: '4px',
-          color: '#c00'
+          color: '#fca5a5',
+          border: '1px solid rgba(239, 68, 68, 0.3)'
         }}>
           <strong>Error:</strong> {error}
         </div>
@@ -334,14 +345,15 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
         <div style={{ 
           marginTop: '1rem', 
           padding: '1rem', 
-          background: '#efe',
-          borderLeft: '4px solid #0e0',
+          background: 'rgba(34, 197, 94, 0.2)',
+          borderLeft: '4px solid #22c55e',
           borderRadius: '4px',
-          color: '#0a0'
+          color: '#86efac',
+          border: '1px solid rgba(34, 197, 94, 0.3)'
         }}>
-          <strong>✅ Token Deployed Successfully!</strong>
+          <strong>Token Deployed Successfully!</strong>
           
-          <div style={{ marginTop: '0.75rem', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+          <div style={{ marginTop: '0.75rem', fontFamily: 'monospace', fontSize: '0.9rem', color: '#cbd5e1' }}>
             <div style={{ marginBottom: '0.5rem' }}>
               <strong>Contract Address:</strong><br />
               {deployedAddress}
@@ -352,17 +364,17 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
             <div style={{ 
               marginTop: '0.75rem', 
               padding: '0.75rem', 
-              background: '#fff',
+              background: 'rgba(15, 23, 42, 0.5)',
               borderRadius: '6px',
-              border: '2px solid #0e0'
+              border: '2px solid rgba(34, 197, 94, 0.3)'
             }}>
-              <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                🎉 Tokens Minted to Your Wallet!
+              <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.25rem', color: '#e2e8f0' }}>
+                Tokens Minted to Your Wallet!
               </div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0a0' }}>
+              <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#86efac' }}>
                 {tokenBalance} {tokenSymbol || 'tokens'}
               </div>
-              <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
+              <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginTop: '0.25rem' }}>
                 Initial supply has been automatically minted to your address
               </div>
             </div>
@@ -373,7 +385,7 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
               href={`https://testnet.arcscan.app/address/${deployedAddress}`}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: '#667eea', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 600 }}
+              style={{ color: '#a78bfa', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 600 }}
             >
               View on Arcscan →
             </a>
