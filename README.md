@@ -1,66 +1,107 @@
 # Arc Pay USDC - Token Wallet & Marketplace
 
-> Ứng dụng ví token và marketplace trên Arc Testnet với khả năng deploy, gửi/nhận tokens, và quản lý tokens on-chain.
+> A complete Web3 application for deploying, managing, and trading ERC-20 tokens on Arc Testnet with on-chain token registry.
 
-## 🌟 Ứng dụng của dự án
+## Project Overview
 
-Arc Pay USDC là một ứng dụng Web3 hoàn chỉnh cho phép người dùng:
+Arc Pay USDC is a comprehensive Web3 application that enables users to:
 
-- **Deploy ERC-20 Tokens**: Tạo và deploy token tùy chỉnh trên Arc Testnet với một vài cú click
-- **Token Wallet**: Quản lý và gửi/nhận tokens (USDC native và ERC-20 tokens)
-- **Token Marketplace**: Khám phá và duyệt tất cả tokens đã được deploy trên network
-- **Transaction History**: Theo dõi lịch sử giao dịch của ví đang kết nối
-- **On-chain Registry**: Tất cả tokens được lưu trữ và quản lý on-chain thông qua TokenRegistry contract
+- **Deploy ERC-20 Tokens**: Create and deploy custom tokens on Arc Testnet with just a few clicks
+- **Token Wallet**: Manage and send/receive tokens (native USDC and ERC-20 tokens)
+- **Token Marketplace**: Discover and browse all tokens deployed on the network
+- **Transaction History**: Track transaction history for the connected wallet
+- **On-chain Registry**: All tokens are stored and managed on-chain through the TokenRegistry contract
 
-## ✨ Tính năng chính
+## Applications & Use Cases
 
-### 1. **Token Deployment** 🚀
-- Deploy ERC-20 tokens với tên, symbol, decimals và initial supply tùy chỉnh
-- Tự động mint initial supply cho deployer
-- Tự động đăng ký token vào TokenRegistry on-chain
-- Hiển thị balance của token vừa deploy ngay lập tức
+This project serves as a complete token management and trading platform with various real-world applications:
 
-### 2. **Token Wallet** 💼
-- Xem balance của USDC native và tất cả deployed tokens
-- Gửi tokens (USDC native, deployed tokens, hoặc custom token address)
-- Tự động load và hiển thị balance của token
-- Format số chính xác cho cả số lớn và số nhỏ
+### 1. Token Creation Platform
+- **For Developers**: Quickly create and deploy test tokens for dApp development
+- **For Communities**: Launch community tokens or governance tokens
+- **For Businesses**: Create branded tokens or loyalty points tokens
+- **For Education**: Teach token economics and blockchain fundamentals
 
-### 3. **Transaction History** 📜
-- Xem lịch sử giao dịch từ Arcscan API
-- Chỉ fetch transactions của ví đang kết nối (tiết kiệm bandwidth)
-- Hiển thị sent/received với timestamp và link đến Arcscan
-- Refresh để cập nhật lịch sử mới nhất
+### 2. Token Wallet & Management
+- **Personal Token Portfolio**: Manage all your deployed tokens in one place
+- **Multi-token Support**: Handle both native USDC and custom ERC-20 tokens
+- **Balance Tracking**: Real-time balance updates across all tokens
+- **Transaction Monitoring**: Complete transaction history for auditing
 
-### 4. **Token Marketplace** 🏪
-- Duyệt tất cả tokens đã được deploy trên network
-- Tìm kiếm tokens theo tên hoặc symbol
-- Xem thông tin chi tiết: deployer, initial supply, deploy timestamp
-- Highlight tokens mà bạn sở hữu
-- Link đến Arcscan để xem chi tiết contract
+### 3. Token Marketplace & Discovery
+- **Token Browser**: Discover new tokens created by the community
+- **Token Search**: Find tokens by name, symbol, or contract address
+- **Token Analytics**: View deployment details, supply, and ownership
+- **Public Registry**: Transparent on-chain token directory
 
-### 5. **Wallet Integration** 🔐
-- **MetaMask**: Kết nối và sử dụng MetaMask wallet
-- **Privy Embedded Wallet**: Tạo ví embedded cho người mới
-- Tự động chuyển sang Arc Testnet khi connect MetaMask
-- Ưu tiên external wallets (MetaMask) over embedded wallet
-- Hiển thị loại wallet đang sử dụng trong UI
+### 4. On-chain Token Registry
+- **Decentralized Directory**: All tokens registered on-chain (no central server)
+- **Query Interface**: Query tokens by deployer or browse all tokens
+- **Immutable Records**: Token information permanently stored on blockchain
+- **Future Extensions**: Foundation for token swaps, auctions, or trading features
 
-### 6. **On-chain Token Registry** 📋
-- TokenRegistry contract quản lý tất cả tokens on-chain
-- Tự động đăng ký tokens khi deploy
-- Fetch tokens từ registry (không cần localStorage)
-- Fallback về localStorage nếu chưa có registry
+### 5. Web3 Wallet Integration
+- **MetaMask Support**: Full compatibility with MetaMask and other EIP-1193 wallets
+- **Embedded Wallets**: Email-based wallet creation for non-crypto users
+- **Network Management**: Automatic Arc Testnet configuration
+- **Seamless UX**: Easy wallet switching and management
 
-## 🏗️ Kiến trúc
+### Potential Extensions
+- **Token Swapping**: Build DEX features on top of the registry
+- **Token Staking**: Implement staking mechanisms for registered tokens
+- **Token Auctions**: Create auction system for token sales
+- **Governance**: Add voting and governance features for token communities
+- **Multi-chain Support**: Extend to other EVM-compatible chains
+
+## Features
+
+### 1. Token Deployment
+- Deploy ERC-20 tokens with custom name, symbol, decimals, and initial supply
+- Automatic minting of initial supply to deployer
+- Automatic token registration to on-chain TokenRegistry
+- Instant balance display for newly deployed tokens
+
+### 2. Token Wallet
+- View balance of native USDC and all deployed tokens
+- Send tokens (native USDC, deployed tokens, or custom token address)
+- Automatic loading and display of token balances
+- Accurate number formatting for both large and small values
+
+### 3. Transaction History
+- View transaction history from Arcscan API
+- Only fetches transactions for the connected wallet (saves bandwidth)
+- Display sent/received transactions with timestamps and Arcscan links
+- Refresh to update with latest history
+
+### 4. Token Marketplace
+- Browse all tokens deployed on the network
+- Search tokens by name or symbol
+- View detailed information: deployer, initial supply, deploy timestamp
+- Highlight tokens that you own
+- Link to Arcscan for contract details
+
+### 5. Wallet Integration
+- **MetaMask**: Connect and use MetaMask wallet
+- **Privy Embedded Wallet**: Create embedded wallet for newcomers
+- Automatic network switch to Arc Testnet when connecting MetaMask
+- Prioritizes external wallets (MetaMask) over embedded wallet
+- Displays wallet type currently in use in the UI
+
+### 6. On-chain Token Registry
+- TokenRegistry contract manages all tokens on-chain
+- Automatic token registration upon deployment
+- Fetch tokens from registry (no localStorage needed)
+- Fallback to localStorage if registry not available
+
+## Architecture
 
 ```
 ┌─────────────────────────────────────────┐
 │          Frontend (React)               │
-│  - Token Deployment UI                  │
+│  - Token Deployment UI                 │
 │  - Wallet Integration (Privy + MetaMask)│
 │  - Transaction History                  │
-│  - Token Marketplace                    │
+│  - Token Marketplace                   │
 └──────────────┬──────────────────────────┘
                │
                ├─► Privy (Auth & Wallets)
@@ -81,34 +122,34 @@ Arc Pay USDC là một ứng dụng Web3 hoàn chỉnh cho phép người dùng:
 └─────────────────────────────────────────┘
 ```
 
-## 📋 Smart Contracts
+## Smart Contracts
 
 ### TokenRegistry
 **Address**: `0x85667fc0ad255789814B952D73DFe91bd9A58C21`
 
-TokenRegistry là contract trung tâm quản lý tất cả tokens được deploy trên network:
+TokenRegistry is the central contract that manages all tokens deployed on the network:
 
-- `registerToken()`: Đăng ký token mới vào registry
-- `getTokensByDeployer()`: Lấy tất cả tokens của một deployer
-- `getAllTokens()`: Lấy tất cả tokens trong registry
-- `getTotalTokens()`: Lấy tổng số tokens đã đăng ký
+- `registerToken()`: Register a new token in the registry
+- `getTokensByDeployer()`: Get all tokens by a specific deployer
+- `getAllTokens()`: Get all tokens in the registry
+- `getTotalTokens()`: Get total number of registered tokens
 
 **Arcscan**: [https://testnet.arcscan.app/address/0x85667fc0ad255789814B952D73DFe91bd9A58C21](https://testnet.arcscan.app/address/0x85667fc0ad255789814B952D73DFe91bd9A58C21)
 
 ### SimpleToken (ERC-20)
-Standard ERC-20 token contract với các tính năng:
+Standard ERC-20 token contract with features:
 - Transfer, approve, allowance
-- Mint tokens cho deployer khi khởi tạo
-- Tùy chỉnh name, symbol, decimals, initial supply
+- Mint tokens to deployer on initialization
+- Customizable name, symbol, decimals, initial supply
 
-## 🚀 Cài đặt và Chạy
+## Installation & Setup
 
-### Yêu cầu
+### Requirements
 - Node.js >= 18
-- npm hoặc yarn
-- MetaMask (tùy chọn, cho external wallet)
+- npm or yarn
+- MetaMask (optional, for external wallet)
 
-### 1. Clone repository
+### 1. Clone Repository
 
 ```bash
 git clone <repository-url>
@@ -123,91 +164,76 @@ npm install
 npm run dev
 ```
 
-Frontend sẽ chạy tại: http://localhost:5173
+Frontend will run at: http://localhost:5173
 
-### 3. Deploy TokenRegistry (Nếu chưa có)
+### 3. Deploy TokenRegistry (If not already deployed)
 
-1. Mở ứng dụng và login với Privy
-2. Vào tab "Deploy"
+1. Open the application and login with Privy
+2. Go to "Deploy" tab
 3. Click "Deploy TokenRegistry"
-4. Copy địa chỉ deployed và cập nhật vào `frontend/src/registryConfig.ts`
+4. Copy the deployed address and update `frontend/src/registryConfig.ts`
 
-Hoặc sử dụng `frontend/src/DeployRegistry.tsx` component.
+Or use the `frontend/src/DeployRegistry.tsx` component.
 
-### 4. Bắt đầu sử dụng
+### 4. Start Using
 
-1. Mở http://localhost:5173
-2. Login với Privy (email hoặc MetaMask)
-3. Nếu dùng MetaMask, ứng dụng sẽ tự động chuyển sang Arc Testnet
-4. Deploy tokens, gửi/nhận, và khám phá marketplace!
+1. Open http://localhost:5173
+2. Login with Privy (email or MetaMask)
+3. If using MetaMask, the app will automatically switch to Arc Testnet
+4. Deploy tokens, send/receive, and explore the marketplace!
 
-## 🎯 Hướng dẫn sử dụng
+## Usage Guide
 
 ### Deploy Token
 
-1. Vào tab **"Deploy"**
-2. Điền thông tin token:
-   - **Name**: Tên token (VD: "My Token")
-   - **Symbol**: Ký hiệu (VD: "MTK")
-   - **Decimals**: Số chữ số thập phân (thường là 18)
-   - **Initial Supply**: Số lượng token ban đầu
+1. Go to **"Deploy"** tab
+2. Fill in token information:
+   - **Name**: Token name (e.g., "My Token")
+   - **Symbol**: Token symbol (e.g., "MTK")
+   - **Decimals**: Number of decimal places (usually 18)
+   - **Initial Supply**: Initial token amount
 3. Click **"Deploy Token"**
-4. Confirm transaction trong MetaMask hoặc Privy
-5. Token sẽ được deploy và tự động mint cho bạn!
+4. Confirm transaction in MetaMask or Privy
+5. Token will be deployed and automatically minted to your wallet!
 
-### Gửi Tokens
+### Send Tokens
 
-1. Vào tab **"Send"**
-2. Chọn loại token:
-   - **USDC**: Native USDC trên Arc
-   - **Deployed Tokens**: Tokens bạn đã deploy
-   - **Custom**: Nhập contract address
-3. Nhập địa chỉ người nhận và số lượng
-4. Click **"Send"** và confirm transaction
+1. Go to **"Send"** tab
+2. Select token type:
+   - **USDC**: Native USDC on Arc
+   - **Deployed Tokens**: Tokens you've deployed
+   - **Custom**: Enter contract address
+3. Enter recipient address and amount
+4. Click **"Send"** and confirm transaction
 
-### Xem Transaction History
+### View Transaction History
 
-1. Vào tab **"History"**
-2. Xem tất cả transactions của ví đang kết nối
-3. Click vào transaction hash để xem trên Arcscan
-4. Click **"Refresh"** để cập nhật
+1. Go to **"History"** tab
+2. View all transactions for the connected wallet
+3. Click on transaction hash to view on Arcscan
+4. Click **"Refresh"** to update
 
-### Khám phá Marketplace
+### Explore Marketplace
 
-1. Vào tab **"Marketplace"**
-2. Xem tất cả tokens đã được deploy trên network
-3. Sử dụng search bar để tìm tokens
-4. Tokens bạn sở hữu sẽ được highlight
-5. Click vào token để xem trên Arcscan
-
-## 🔧 Cấu hình
-
-### Privy App ID
-
-Privy App ID hiện tại: `cmewiuzl900mylc0csry901tg`
-
-Để thay đổi, sửa trong `frontend/src/main.tsx`:
-
-```typescript
-<PrivyProvider
-  appId="YOUR_PRIVY_APP_ID"
-  ...
-/>
-```
+1. Go to **"Marketplace"** tab
+2. View all tokens deployed on the network
+3. Use search bar to find tokens
+4. Your owned tokens will be highlighted
+5. Click on token to view on Arcscan
 
 ### Token Registry Address
 
-Địa chỉ TokenRegistry mặc định: `0x85667fc0ad255789814B952D73DFe91bd9A58C21`
+Default TokenRegistry address: `0x85667fc0ad255789814B952D73DFe91bd9A58C21`
 
-Để thay đổi, sửa trong `frontend/src/registryConfig.ts`:
+To change, edit `frontend/src/registryConfig.ts`:
 
 ```typescript
 export const REGISTRY_ADDRESS = '0xYourRegistryAddress';
 ```
 
-Hoặc nó sẽ tự động load từ `localStorage.getItem('registryAddress')` khi deploy.
+Or it will automatically load from `localStorage.getItem('registryAddress')` when deployed.
 
-## 📊 Network Info
+## Network Information
 
 **Arc Testnet**
 
@@ -217,7 +243,7 @@ Hoặc nó sẽ tự động load từ `localStorage.getItem('registryAddress')`
 - **Faucet**: https://faucet.circle.com
 - **Native Currency**: USDC (18 decimals on-chain, 6 decimals for display)
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### Frontend
 - **React** 18.2
@@ -232,7 +258,7 @@ Hoặc nó sẽ tự động load từ `localStorage.getItem('registryAddress')`
 - **Hardhat** / **solc** - Compilation
 - **ERC-20** Standard tokens
 
-## 📂 Cấu trúc thư mục
+## Project Structure
 
 ```
 arc-payusdc/
@@ -255,55 +281,30 @@ arc-payusdc/
 └── README.md
 ```
 
-## 🔒 Bảo mật
+## Security
 
-- **Private Keys**: Không bao giờ được lưu trữ hoặc gửi lên server
-- **MetaMask**: Tất cả transactions được ký trong MetaMask
-- **Privy Embedded Wallet**: Sử dụng MPC (Multi-Party Computation) cho bảo mật
-- **On-chain Registry**: Tất cả token data được lưu trữ on-chain, không phụ thuộc backend
+- **Private Keys**: Never stored or sent to server
+- **MetaMask**: All transactions are signed in MetaMask
+- **Privy Embedded Wallet**: Uses MPC (Multi-Party Computation) for security
+- **On-chain Registry**: All token data stored on-chain, no backend dependency
 
-## 🐛 Troubleshooting
+## Contributing
 
-### MetaMask không tự động chuyển network
+PRs welcome! Please:
+1. Fork the project
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-- Kiểm tra xem MetaMask đã có Arc Testnet chưa
-- Nếu chưa, ứng dụng sẽ tự động thêm network
-- Đảm bảo bạn đã approve request switch network
-
-### Không thấy tokens trong balance
-
-- Đảm bảo bạn đã deploy TokenRegistry trước
-- Check xem token đã được đăng ký vào Registry chưa
-- Refresh balance bằng cách click "Refresh" button
-- Kiểm tra Arcscan để verify balance on-chain
-
-### Transaction history không hiển thị
-
-- Đảm bảo wallet đang kết nối đúng
-- Check Arcscan API có đang hoạt động không
-- Thử refresh lại
-
-## 🤝 Đóng góp
-
-PRs welcome! Vui lòng:
-1. Fork project
-2. Tạo feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open Pull Request
-
-## 📄 License
-
-MIT
-
-## 🙏 Credits
+## Credits
 
 - **Arc Network**: Stablecoin-native Layer-1 blockchain by Circle
 - **Privy**: Wallet infrastructure and authentication
 - **Ethers.js**: Ethereum JavaScript library
 - **React**: UI framework
 
-## 📖 Documentation
+## Documentation
 
 - [Arc Network Docs](https://docs.arc.network)
 - [Arc Explorer](https://testnet.arcscan.app)
@@ -312,4 +313,4 @@ MIT
 
 ---
 
-**Built with ❤️ on Arc Network**
+**Built on Arc Network**
