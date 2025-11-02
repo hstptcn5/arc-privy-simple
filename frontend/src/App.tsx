@@ -50,17 +50,113 @@ function App() {
   const [customTokenInfo, setCustomTokenInfo] = useState<{name: string, symbol: string, decimals: number} | null>(null);
   const [customTokenBalance, setCustomTokenBalance] = useState<string | null>(null);
 
-  // Get embedded wallet
+  // Get wallet - prioritize external wallets (MetaMask, etc.) over embedded wallet
+  // External wallets have walletClientType like 'metamask', 'walletconnect', etc.
+  // Embedded wallet has walletClientType === 'privy'
+  
+  // Debug: Log all wallets
+  useEffect(() => {
+    if (wallets.length > 0) {
+      console.log('=== WALLETS DEBUG ===');
+      console.log(`Total wallets: ${wallets.length}`);
+      wallets.forEach((w, idx) => {
+        console.log(`Wallet ${idx + 1}:`, {
+          address: w.address,
+          walletClientType: w.walletClientType,
+          chainId: w.chainId,
+        });
+      });
+      console.log('====================');
+    }
+  }, [wallets]);
+  
+  // First, try to find external wallet (MetaMask, WalletConnect, etc.)
+  const externalWallet = wallets.find(w => w.walletClientType !== 'privy' && w.walletClientType !== undefined);
+  
+  // If no external wallet, use embedded wallet
   const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
+  
+  // Prioritize external wallet
+  const wallet = externalWallet || embeddedWallet;
+  
+  // Debug: Log selected wallet
+  useEffect(() => {
+    if (wallet) {
+      console.log('Selected wallet:', {
+        address: wallet.address,
+        walletClientType: wallet.walletClientType,
+        isExternal: wallet.walletClientType !== 'privy',
+      });
+    }
+  }, [wallet]);
+
+  // Switch to Arc Testnet for external wallets (MetaMask, etc.)
+  const switchToArcTestnet = useCallback(async () => {
+    // Only switch for external wallets, not embedded wallet
+    if (!wallet || wallet.walletClientType === 'privy') return;
+    
+    try {
+      const provider = await wallet.getEthereumProvider();
+      const ethersProvider = new ethers.BrowserProvider(provider);
+      
+      // Get current network
+      const network = await ethersProvider.getNetwork();
+      const arcTestnetChainId = 5042002n;
+      
+      // If already on Arc Testnet, nothing to do
+      if (network.chainId === arcTestnetChainId) {
+        console.log('Already on Arc Testnet');
+        return;
+      }
+      
+      console.log(`Current network: ${network.chainId}, switching to Arc Testnet (${arcTestnetChainId})`);
+      
+      // Arc Testnet network params
+      const arcTestnetParams = {
+        chainId: `0x${arcTestnetChainId.toString(16)}`, // 0x4d3b0a in hex
+        chainName: 'Arc Testnet',
+        nativeCurrency: {
+          name: 'USDC',
+          symbol: 'USDC',
+          decimals: 18,
+        },
+        rpcUrls: ['https://rpc.testnet.arc.network'],
+        blockExplorerUrls: ['https://testnet.arcscan.app'],
+      };
+      
+      // Try to switch to Arc Testnet
+      try {
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: arcTestnetParams.chainId }],
+        });
+        console.log('Successfully switched to Arc Testnet');
+      } catch (switchError: any) {
+        // If network doesn't exist, add it
+        if (switchError.code === 4902 || switchError.code === -32603) {
+          console.log('Arc Testnet not found, adding network...');
+          await provider.request({
+            method: 'wallet_addEthereumChain',
+            params: [arcTestnetParams],
+          });
+          console.log('Successfully added and switched to Arc Testnet');
+        } else {
+          console.error('Error switching to Arc Testnet:', switchError);
+        }
+      }
+    } catch (err: any) {
+      console.error('Error in switchToArcTestnet:', err);
+    }
+  }, [wallet]);
 
   // Load balance
   const loadBalance = useCallback(async () => {
-    if (!embeddedWallet) return;
+    if (!wallet) return;
     
     try {
-      const provider = await embeddedWallet.getEthereumProvider();
+      const provider = await wallet.getEthereumProvider();
       const ethersProvider = new ethers.BrowserProvider(provider);
-      const address = embeddedWallet.address;
+      const address = wallet.address;
       
       // Native USDC on Arc uses 18 decimals
       const bal = await ethersProvider.getBalance(address);
@@ -71,20 +167,20 @@ function App() {
     } catch (err: any) {
       console.error('Error loading balance:', err);
     }
-  }, [embeddedWallet]);
+  }, [wallet]);
 
   // Load custom token info
   const loadCustomTokenInfo = useCallback(async (tokenAddress: string) => {
-    if (!embeddedWallet || !ethers.isAddress(tokenAddress)) {
+    if (!wallet || !ethers.isAddress(tokenAddress)) {
       setCustomTokenInfo(null);
       setCustomTokenBalance(null);
       return;
     }
 
     try {
-      const provider = await embeddedWallet.getEthereumProvider();
+      const provider = await wallet.getEthereumProvider();
       const ethersProvider = new ethers.BrowserProvider(provider);
-      const address = embeddedWallet.address;
+      const address = wallet.address;
 
       const TokenABI = [
         { 
@@ -147,11 +243,11 @@ function App() {
       setCustomTokenBalance(null);
       setError(`Invalid token address: ${err.message}`);
     }
-  }, [embeddedWallet]);
+  }, [wallet]);
 
   // Send Token (USDC or ERC20)
   const sendToken = async () => {
-    if (!authenticated || !embeddedWallet) {
+    if (!authenticated || !wallet) {
       setError('Please login first');
       return;
     }
@@ -177,7 +273,7 @@ function App() {
     setResult(null);
 
     try {
-      const provider = await embeddedWallet.getEthereumProvider();
+      const provider = await wallet.getEthereumProvider();
       const ethersProvider = new ethers.BrowserProvider(provider);
       const signer = await ethersProvider.getSigner();
 
@@ -275,35 +371,45 @@ function App() {
     }
   };
 
-  // Load transaction history from Arcscan API
+  // Load transaction history from Arcscan API - ONLY for the currently connected wallet
+  // This only fetches transactions for the wallet that user is currently using (not all wallets)
   const loadTransactionHistory = useCallback(async () => {
-    if (!embeddedWallet || !authenticated) return;
+    // Only fetch if wallet is connected and user is authenticated
+    if (!wallet || !authenticated) {
+      setTransactions([]);
+      return;
+    }
     
     setLoadingHistory(true);
     try {
-      const address = embeddedWallet.address;
-      // Arcscan API endpoint for transactions
-      const response = await fetch(`https://testnet.arcscan.app/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc`);
+      // Get address of the CURRENTLY CONNECTED wallet only (not all wallets)
+      const connectedAddress = wallet.address;
+      console.log(`Fetching transaction history for connected wallet: ${connectedAddress}`);
+      
+      // Arcscan API endpoint - only fetch transactions for this one address
+      const response = await fetch(`https://testnet.arcscan.app/api?module=account&action=txlist&address=${connectedAddress}&startblock=0&endblock=99999999&sort=desc`);
       const data = await response.json();
       
-      if (data.status === '1' && data.result) {
-        // Filter and format transactions
+      if (data.status === '1' && data.result && Array.isArray(data.result)) {
+        // Format transactions - API already returns only transactions involving this address
+        // So no need to filter again, just format the data
         const formattedTxs = data.result
-          .filter((tx: any) => tx.from.toLowerCase() === address.toLowerCase() || tx.to.toLowerCase() === address.toLowerCase())
           .map((tx: any) => ({
             hash: tx.hash,
             from: tx.from,
             to: tx.to,
             value: ethers.formatUnits(tx.value || '0', 18),
             timestamp: parseInt(tx.timeStamp),
-            type: tx.from.toLowerCase() === address.toLowerCase() ? 'sent' : 'received',
+            type: tx.from.toLowerCase() === connectedAddress.toLowerCase() ? 'sent' : 'received',
             tokenAddress: null,
             isTokenTransfer: tx.input && tx.input !== '0x' && tx.input.length > 10
           }))
-          .slice(0, 50); // Limit to 50 most recent
+          .slice(0, 30); // Limit to 30 most recent to save bandwidth
         
+        console.log(`Loaded ${formattedTxs.length} transactions for wallet ${connectedAddress}`);
         setTransactions(formattedTxs);
       } else {
+        console.log(`No transactions found for wallet ${connectedAddress}`);
         setTransactions([]);
       }
     } catch (err: any) {
@@ -312,11 +418,11 @@ function App() {
     } finally {
       setLoadingHistory(false);
     }
-  }, [embeddedWallet, authenticated]);
+  }, [wallet, authenticated]);
 
   // Load all tokens from Registry (Marketplace)
   const loadAllTokens = useCallback(async () => {
-    if (!embeddedWallet || !authenticated) return;
+    if (!wallet || !authenticated) return;
     
     const registryAddr = REGISTRY_ADDRESS || localStorage.getItem('registryAddress') || '';
     if (!registryAddr || !ethers.isAddress(registryAddr)) {
@@ -326,57 +432,76 @@ function App() {
 
     setLoadingMarketplace(true);
     try {
-      const provider = await embeddedWallet.getEthereumProvider();
+      const provider = await wallet.getEthereumProvider();
       const ethersProvider = new ethers.BrowserProvider(provider);
       
       const registry = new ethers.Contract(registryAddr, REGISTRY_ABI, ethersProvider);
-      const [addresses, infos] = await registry.getAllTokens();
       
-      const tokens = infos.map((info: any) => ({
-        address: info.tokenAddress,
-        deployer: info.deployer,
-        name: info.name,
-        symbol: info.symbol,
-        decimals: Number(info.decimals),
-        initialSupply: info.initialSupply.toString(),
-        deployTimestamp: Number(info.deployTimestamp),
-        isOwned: deployedTokens.some(t => t.address === info.tokenAddress)
-      }));
-      
-      setAllTokens(tokens);
+      // Try to get all tokens, handle empty/error responses gracefully
+      try {
+        const [addresses, infos] = await registry.getAllTokens();
+        
+        // Check if we got valid data
+        if (addresses && infos && Array.isArray(addresses) && Array.isArray(infos) && addresses.length > 0) {
+          const tokens = infos.map((info: any) => ({
+            address: info.tokenAddress,
+            deployer: info.deployer,
+            name: info.name,
+            symbol: info.symbol,
+            decimals: Number(info.decimals),
+            initialSupply: info.initialSupply.toString(),
+            deployTimestamp: Number(info.deployTimestamp),
+            isOwned: deployedTokens.some(t => t.address === info.tokenAddress)
+          }));
+          
+          setAllTokens(tokens);
+        } else {
+          // No tokens found in Registry
+          console.log('No tokens found in Registry');
+          setAllTokens([]);
+        }
+      } catch (contractErr: any) {
+        // If contract call fails (e.g., BAD_DATA from empty response), show empty list
+        if (contractErr.code === 'BAD_DATA' || contractErr.message?.includes('could not decode')) {
+          console.log('Registry returned empty or invalid data (likely no tokens registered)');
+          setAllTokens([]);
+        } else {
+          throw contractErr; // Re-throw other errors
+        }
+      }
     } catch (err: any) {
       console.error('Error loading all tokens:', err);
       setAllTokens([]);
     } finally {
       setLoadingMarketplace(false);
     }
-  }, [embeddedWallet, authenticated, deployedTokens]);
+  }, [wallet, authenticated, deployedTokens]);
 
   // Load history when tab is activated
   useEffect(() => {
-    if (activeTab === 'history' && authenticated && embeddedWallet) {
+    if (activeTab === 'history' && authenticated && wallet) {
       loadTransactionHistory();
     }
-  }, [activeTab, authenticated, embeddedWallet, loadTransactionHistory]);
+  }, [activeTab, authenticated, wallet, loadTransactionHistory]);
 
   // Load marketplace when tab is activated
   useEffect(() => {
-    if (activeTab === 'marketplace' && authenticated && embeddedWallet) {
+    if (activeTab === 'marketplace' && authenticated && wallet) {
       loadAllTokens();
     }
-  }, [activeTab, authenticated, embeddedWallet, loadAllTokens]);
+  }, [activeTab, authenticated, wallet, loadAllTokens]);
 
   // Load token balances
   const loadTokenBalances = useCallback(async (tokens: DeployedToken[]) => {
-    if (!embeddedWallet || tokens.length === 0) {
+    if (!wallet || tokens.length === 0) {
       console.log('Cannot load token balances: no wallet or no tokens');
       return;
     }
     
     try {
-      const provider = await embeddedWallet.getEthereumProvider();
+      const provider = await wallet.getEthereumProvider();
       const ethersProvider = new ethers.BrowserProvider(provider);
-      const address = embeddedWallet.address;
+      const address = wallet.address;
       
       const SimpleTokenABI = [
         { 
@@ -459,41 +584,61 @@ function App() {
     } catch (err: any) {
       console.error('Error loading token balances:', err);
     }
-  }, [embeddedWallet]);
+  }, [wallet]);
 
   // Load deployed tokens from Registry (on-chain) or localStorage (fallback)
   const loadTokensFromRegistry = useCallback(async () => {
-    if (!embeddedWallet || !authenticated) return;
+    if (!wallet || !authenticated) return;
     
     const registryAddr = REGISTRY_ADDRESS || localStorage.getItem('registryAddress') || '';
     
     if (registryAddr && ethers.isAddress(registryAddr)) {
       try {
-        const provider = await embeddedWallet.getEthereumProvider();
+        const provider = await wallet.getEthereumProvider();
         const ethersProvider = new ethers.BrowserProvider(provider);
-        const deployerAddress = embeddedWallet.address;
+        const deployerAddress = wallet.address;
         
         const registry = new ethers.Contract(registryAddr, REGISTRY_ABI, ethersProvider);
-        const [addresses, infos] = await registry.getTokensByDeployer(deployerAddress);
         
-        const tokens: DeployedToken[] = infos.map((info: any) => ({
-          address: info.tokenAddress,
-          name: info.name,
-          symbol: info.symbol,
-          decimals: Number(info.decimals),
-        }));
-        
-        console.log(`Loaded ${tokens.length} tokens from Registry`);
-        
-        // Immediately load balances for these tokens
-        if (tokens.length > 0) {
-          setDeployedTokens(tokens);
-          // Load balances after a short delay to ensure state is updated
-          setTimeout(() => {
-            loadTokenBalances(tokens);
-          }, 100);
-        } else {
-          setDeployedTokens(tokens);
+        // Try to get tokens, handle empty/error responses gracefully
+        try {
+          const [addresses, infos] = await registry.getTokensByDeployer(deployerAddress);
+          
+          // Check if we got valid data
+          if (addresses && infos && Array.isArray(addresses) && Array.isArray(infos) && addresses.length > 0) {
+            const tokens: DeployedToken[] = infos.map((info: any) => ({
+              address: info.tokenAddress,
+              name: info.name,
+              symbol: info.symbol,
+              decimals: Number(info.decimals),
+            }));
+            
+            console.log(`Loaded ${tokens.length} tokens from Registry`);
+            
+            // Immediately load balances for these tokens
+            if (tokens.length > 0) {
+              setDeployedTokens(tokens);
+              // Load balances after a short delay to ensure state is updated
+              setTimeout(() => {
+                loadTokenBalances(tokens);
+              }, 100);
+            } else {
+              setDeployedTokens(tokens);
+            }
+          } else {
+            // No tokens found for this deployer
+            console.log('No tokens found in Registry for this deployer');
+            setDeployedTokens([]);
+            loadTokensFromLocalStorage();
+          }
+        } catch (contractErr: any) {
+          // If contract call fails (e.g., BAD_DATA from empty response), check localStorage
+          if (contractErr.code === 'BAD_DATA' || contractErr.message?.includes('could not decode')) {
+            console.log('Registry returned empty or invalid data (likely no tokens registered), checking localStorage');
+            loadTokensFromLocalStorage();
+          } else {
+            throw contractErr; // Re-throw other errors
+          }
         }
       } catch (err: any) {
         console.error('Error loading tokens from Registry:', err);
@@ -504,7 +649,7 @@ function App() {
       // No Registry, use localStorage
       loadTokensFromLocalStorage();
     }
-  }, [embeddedWallet, authenticated, loadTokenBalances]);
+  }, [wallet, authenticated, loadTokenBalances]);
 
   const loadTokensFromLocalStorage = useCallback(() => {
     const saved = localStorage.getItem('deployedTokens');
@@ -550,11 +695,11 @@ function App() {
     }
     
     // Load balance immediately
-    if (embeddedWallet) {
+    if (wallet) {
       try {
-        const provider = await embeddedWallet.getEthereumProvider();
+        const provider = await wallet.getEthereumProvider();
         const ethersProvider = new ethers.BrowserProvider(provider);
-        const walletAddress = embeddedWallet.address;
+        const walletAddress = wallet.address;
         
         const SimpleTokenABI = [
           { 
@@ -590,25 +735,54 @@ function App() {
         console.error('Error loading new token balance:', err);
       }
     }
-  }, [deployedTokens, embeddedWallet, loadTokensFromRegistry]);
+  }, [deployedTokens, wallet, loadTokensFromRegistry]);
 
-  // Auto-load balances when authenticated
+  // Auto-load balances and switch network when authenticated
   useEffect(() => {
-    if (authenticated && embeddedWallet) {
+    if (authenticated && wallet) {
+      // Switch to Arc Testnet for external wallets
+      switchToArcTestnet();
       loadBalance();
     }
-  }, [authenticated, embeddedWallet, loadBalance]);
+  }, [authenticated, wallet, loadBalance, switchToArcTestnet]);
+
+  // When user logs in, optionally disconnect external wallets if they want email-only mode
+  // Note: This is optional - Privy supports multiple wallets simultaneously
+  // Uncomment the code below if you want to auto-disconnect external wallets on email login
+  /*
+  useEffect(() => {
+    if (authenticated && disconnectWallet) {
+      // Check if user has both embedded and external wallets
+      const hasEmbedded = wallets.some(w => w.walletClientType === 'privy');
+      const hasExternal = wallets.some(w => w.walletClientType !== 'privy');
+      
+      // If user has both, and they just logged in with email (has embedded wallet),
+      // optionally disconnect external wallets
+      // Uncomment below to enable this behavior:
+      // if (hasEmbedded && hasExternal) {
+      //   const externalWallets = wallets.filter(w => w.walletClientType !== 'privy');
+      //   externalWallets.forEach(async (wallet) => {
+      //     try {
+      //       await disconnectWallet(wallet.address);
+      //     } catch (err) {
+      //       console.error('Error disconnecting wallet:', err);
+      //     }
+      //   });
+      // }
+    }
+  }, [authenticated, wallets, disconnectWallet]);
+  */
 
   // Load token balances when tokens change
   useEffect(() => {
-    if (authenticated && embeddedWallet && deployedTokens.length > 0) {
+    if (authenticated && wallet && deployedTokens.length > 0) {
       // Only load if tokens don't have balances yet
       const needsBalance = deployedTokens.some(t => t.balance === undefined);
       if (needsBalance) {
         loadTokenBalances(deployedTokens);
       }
     }
-  }, [authenticated, embeddedWallet, deployedTokens.length, loadTokenBalances]);
+  }, [authenticated, wallet, deployedTokens.length, loadTokenBalances]);
 
   // Not ready yet
   if (!ready) {
@@ -776,7 +950,24 @@ function App() {
             Arc Wallet
           </h1>
           <button
-            onClick={logout}
+            onClick={async () => {
+              // Try to disconnect MetaMask permissions before logout
+              if (window.ethereum && window.ethereum.isMetaMask) {
+                try {
+                  // Revoke MetaMask permissions
+                  await window.ethereum.request({
+                    method: 'wallet_revokePermissions',
+                    params: [{ eth_accounts: {} }],
+                  });
+                  console.log('MetaMask permissions revoked');
+                } catch (err: any) {
+                  // Ignore errors (user may have rejected or method not supported)
+                  console.log('MetaMask revoke optional:', err.message || err);
+                }
+              }
+              // Logout from Privy (this will disconnect all Privy-managed wallets)
+              await logout();
+            }}
             style={{
               padding: '0.5rem 1rem',
               fontSize: '0.9rem',
@@ -962,7 +1153,8 @@ function App() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'balance' && embeddedWallet && (
+        <div>
+        {activeTab === 'balance' && wallet && (
           <div style={{ 
             padding: '2rem', 
             background: 'rgba(15, 23, 42, 0.4)',
@@ -981,6 +1173,9 @@ function App() {
               <div style={{ marginBottom: '1rem', fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Wallet Address
               </div>
+              <div style={{ marginBottom: '0.5rem', fontSize: '0.75rem', color: wallet.walletClientType !== 'privy' ? '#22c55e' : '#f59e0b', fontWeight: 500 }}>
+                {wallet.walletClientType === 'privy' ? 'Embedded Wallet (Privy)' : `External Wallet (${wallet.walletClientType || 'Unknown'})`}
+              </div>
               <div style={{ 
                 fontFamily: 'monospace', 
                 fontSize: '0.95rem',
@@ -989,11 +1184,11 @@ function App() {
                 color: '#e2e8f0',
                 fontWeight: 500
               }}>
-                {embeddedWallet.address}
+                {wallet.address}
               </div>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(embeddedWallet.address);
+                  navigator.clipboard.writeText(wallet.address);
                   setError('');
                   setTimeout(() => setError(''), 100);
                 }}
@@ -1379,7 +1574,7 @@ function App() {
           </>
         )}
 
-        {activeTab === 'history' && embeddedWallet && (
+        {activeTab === 'history' && wallet && (
           <div style={{ padding: '2rem', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0' }}>Transaction History</h2>
@@ -1469,7 +1664,7 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'marketplace' && embeddedWallet && (
+        {activeTab === 'marketplace' && wallet && (
           <div style={{ padding: '2rem', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0' }}>Token Marketplace</h2>
@@ -1666,6 +1861,7 @@ function App() {
           <p style={{ margin: '0.5rem 0', color: '#94a3b8' }}>
             Zero gas for users, instant finality
           </p>
+        </div>
         </div>
       </div>
     </div>

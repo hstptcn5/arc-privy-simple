@@ -1,63 +1,112 @@
-# Arc USDC Onboarding - Real Mode
+# Arc Pay USDC - Token Wallet & Marketplace
 
-> Email → Smart Wallet → Nhận $5 USDC thật trên Arc Testnet (<1 giây finality)
+> Ứng dụng ví token và marketplace trên Arc Testnet với khả năng deploy, gửi/nhận tokens, và quản lý tokens on-chain.
 
-⚠️ **REAL MODE ONLY** - Gửi USDC thật trên Arc Network, không có mock!
+## 🌟 Ứng dụng của dự án
 
-## 🌟 Tính năng
+Arc Pay USDC là một ứng dụng Web3 hoàn chỉnh cho phép người dùng:
 
-- ✅ **Email-based onboarding**: Tạo ví chỉ từ email
-- ✅ **Smart Account**: Sử dụng Account Abstraction với Zerodev
-- ✅ **Paymaster sponsorship**: Không cần gas phí
-- ✅ **Instant finality**: Giao dịch finalize trong <1 giây (Arc BFT)
-- ✅ **USDC native gas**: Phí giao dịch bằng USDC stablecoin
-- ✅ **Modern UI**: Giao diện React đẹp, responsive
+- **Deploy ERC-20 Tokens**: Tạo và deploy token tùy chỉnh trên Arc Testnet với một vài cú click
+- **Token Wallet**: Quản lý và gửi/nhận tokens (USDC native và ERC-20 tokens)
+- **Token Marketplace**: Khám phá và duyệt tất cả tokens đã được deploy trên network
+- **Transaction History**: Theo dõi lịch sử giao dịch của ví đang kết nối
+- **On-chain Registry**: Tất cả tokens được lưu trữ và quản lý on-chain thông qua TokenRegistry contract
+
+## ✨ Tính năng chính
+
+### 1. **Token Deployment** 🚀
+- Deploy ERC-20 tokens với tên, symbol, decimals và initial supply tùy chỉnh
+- Tự động mint initial supply cho deployer
+- Tự động đăng ký token vào TokenRegistry on-chain
+- Hiển thị balance của token vừa deploy ngay lập tức
+
+### 2. **Token Wallet** 💼
+- Xem balance của USDC native và tất cả deployed tokens
+- Gửi tokens (USDC native, deployed tokens, hoặc custom token address)
+- Tự động load và hiển thị balance của token
+- Format số chính xác cho cả số lớn và số nhỏ
+
+### 3. **Transaction History** 📜
+- Xem lịch sử giao dịch từ Arcscan API
+- Chỉ fetch transactions của ví đang kết nối (tiết kiệm bandwidth)
+- Hiển thị sent/received với timestamp và link đến Arcscan
+- Refresh để cập nhật lịch sử mới nhất
+
+### 4. **Token Marketplace** 🏪
+- Duyệt tất cả tokens đã được deploy trên network
+- Tìm kiếm tokens theo tên hoặc symbol
+- Xem thông tin chi tiết: deployer, initial supply, deploy timestamp
+- Highlight tokens mà bạn sở hữu
+- Link đến Arcscan để xem chi tiết contract
+
+### 5. **Wallet Integration** 🔐
+- **MetaMask**: Kết nối và sử dụng MetaMask wallet
+- **Privy Embedded Wallet**: Tạo ví embedded cho người mới
+- Tự động chuyển sang Arc Testnet khi connect MetaMask
+- Ưu tiên external wallets (MetaMask) over embedded wallet
+- Hiển thị loại wallet đang sử dụng trong UI
+
+### 6. **On-chain Token Registry** 📋
+- TokenRegistry contract quản lý tất cả tokens on-chain
+- Tự động đăng ký tokens khi deploy
+- Fetch tokens từ registry (không cần localStorage)
+- Fallback về localStorage nếu chưa có registry
 
 ## 🏗️ Kiến trúc
 
 ```
-┌─────────────┐
-│   Frontend  │ React + Vite
-│  (Port 5173)│
-└──────┬──────┘
-       │ HTTP POST /api/onboard
-       ▼
-┌─────────────┐
-│   Backend   │ Node.js + Express
-│  (Port 3001)│
-└──────┬──────┘
-       │
-       ├─► Circle Wallets (Email → Wallet)
-       ├─► Zerodev (Smart Account)
-       ├─► Pimlico Paymaster (Gas sponsorship)
-       │
-       ▼
-┌─────────────┐
-│ Arc Testnet │
-│  USDC Funds │
-└─────────────┘
+┌─────────────────────────────────────────┐
+│          Frontend (React)               │
+│  - Token Deployment UI                  │
+│  - Wallet Integration (Privy + MetaMask)│
+│  - Transaction History                  │
+│  - Token Marketplace                    │
+└──────────────┬──────────────────────────┘
+               │
+               ├─► Privy (Auth & Wallets)
+               │
+               ▼
+┌─────────────────────────────────────────┐
+│        Arc Testnet                      │
+│                                          │
+│  ┌──────────────────────────────┐       │
+│  │  TokenRegistry Contract      │       │
+│  │  0x85667fc0...952D73DFe91... │       │
+│  └──────────────────────────────┘       │
+│                                          │
+│  ┌──────────────────────────────┐       │
+│  │  SimpleToken (ERC-20)         │       │
+│  │  User deployed tokens         │       │
+│  └──────────────────────────────┘       │
+└─────────────────────────────────────────┘
 ```
 
-## 📋 Yêu cầu
+## 📋 Smart Contracts
 
+### TokenRegistry
+**Address**: `0x85667fc0ad255789814B952D73DFe91bd9A58C21`
+
+TokenRegistry là contract trung tâm quản lý tất cả tokens được deploy trên network:
+
+- `registerToken()`: Đăng ký token mới vào registry
+- `getTokensByDeployer()`: Lấy tất cả tokens của một deployer
+- `getAllTokens()`: Lấy tất cả tokens trong registry
+- `getTotalTokens()`: Lấy tổng số tokens đã đăng ký
+
+**Arcscan**: [https://testnet.arcscan.app/address/0x85667fc0ad255789814B952D73DFe91bd9A58C21](https://testnet.arcscan.app/address/0x85667fc0ad255789814B952D73DFe91bd9A58C21)
+
+### SimpleToken (ERC-20)
+Standard ERC-20 token contract với các tính năng:
+- Transfer, approve, allowance
+- Mint tokens cho deployer khi khởi tạo
+- Tùy chỉnh name, symbol, decimals, initial supply
+
+## 🚀 Cài đặt và Chạy
+
+### Yêu cầu
 - Node.js >= 18
 - npm hoặc yarn
-- Foundry (cho smart contracts)
-- Git
-
-## ⚡ Quick Start (< 5 phút)
-
-**Xem hướng dẫn chi tiết:** [REAL_MODE_SETUP.md](REAL_MODE_SETUP.md)
-
-**Tóm tắt:**
-1. Cài dependencies: `npm install` trong backend & frontend
-2. Lấy test USDC: https://faucet.circle.com
-3. Tạo wallet: `cast wallet new`
-4. Fund wallet với USDC
-5. Set `FUNDER_PRIVATE_KEY` trong `.env`
-6. Chạy!
-
-## 🚀 Hướng dẫn cài đặt
+- MetaMask (tùy chọn, cho external wallet)
 
 ### 1. Clone repository
 
@@ -66,31 +115,7 @@ git clone <repository-url>
 cd arc-payusdc
 ```
 
-### 2. Setup Backend
-
-```bash
-cd backend
-npm install
-cp env.example .env
-# Edit .env với API keys của bạn
-npm run dev
-```
-
-**Configuration (TẤT CẢ BẮT BUỘC):**
-```env
-ARC_RPC_URL=https://rpc.testnet.arc.network
-FUNDER_PRIVATE_KEY=0xYourPrivateKeyHere  # BẮT BUỘC!
-```
-
-**Setup theo thứ tự:**
-1. Nhận test USDC từ faucet: https://faucet.circle.com
-2. Tạo funder wallet: `cast wallet new`
-3. Fund wallet với USDC từ faucet
-4. Copy private key vào `backend/.env`
-5. Chạy `npm run dev` trong backend
-6. Server sẽ tự check balance khi start
-
-### 3. Setup Frontend
+### 2. Setup Frontend
 
 ```bash
 cd frontend
@@ -98,140 +123,174 @@ npm install
 npm run dev
 ```
 
-### 4. Deploy Smart Contract (Tùy chọn)
+Frontend sẽ chạy tại: http://localhost:5173
 
-```bash
-cd contracts
+### 3. Deploy TokenRegistry (Nếu chưa có)
 
-# Install Foundry (nếu chưa có)
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
+1. Mở ứng dụng và login với Privy
+2. Vào tab "Deploy"
+3. Click "Deploy TokenRegistry"
+4. Copy địa chỉ deployed và cập nhật vào `frontend/src/registryConfig.ts`
 
-# Deploy contract
-forge create src/Faucet.sol:ArcOnboardFaucet \
-  --rpc-url https://rpc.testnet.arc.network \
-  --private-key $PRIVATE_KEY \
-  --broadcast
+Hoặc sử dụng `frontend/src/DeployRegistry.tsx` component.
+
+### 4. Bắt đầu sử dụng
+
+1. Mở http://localhost:5173
+2. Login với Privy (email hoặc MetaMask)
+3. Nếu dùng MetaMask, ứng dụng sẽ tự động chuyển sang Arc Testnet
+4. Deploy tokens, gửi/nhận, và khám phá marketplace!
+
+## 🎯 Hướng dẫn sử dụng
+
+### Deploy Token
+
+1. Vào tab **"Deploy"**
+2. Điền thông tin token:
+   - **Name**: Tên token (VD: "My Token")
+   - **Symbol**: Ký hiệu (VD: "MTK")
+   - **Decimals**: Số chữ số thập phân (thường là 18)
+   - **Initial Supply**: Số lượng token ban đầu
+3. Click **"Deploy Token"**
+4. Confirm transaction trong MetaMask hoặc Privy
+5. Token sẽ được deploy và tự động mint cho bạn!
+
+### Gửi Tokens
+
+1. Vào tab **"Send"**
+2. Chọn loại token:
+   - **USDC**: Native USDC trên Arc
+   - **Deployed Tokens**: Tokens bạn đã deploy
+   - **Custom**: Nhập contract address
+3. Nhập địa chỉ người nhận và số lượng
+4. Click **"Send"** và confirm transaction
+
+### Xem Transaction History
+
+1. Vào tab **"History"**
+2. Xem tất cả transactions của ví đang kết nối
+3. Click vào transaction hash để xem trên Arcscan
+4. Click **"Refresh"** để cập nhật
+
+### Khám phá Marketplace
+
+1. Vào tab **"Marketplace"**
+2. Xem tất cả tokens đã được deploy trên network
+3. Sử dụng search bar để tìm tokens
+4. Tokens bạn sở hữu sẽ được highlight
+5. Click vào token để xem trên Arcscan
+
+## 🔧 Cấu hình
+
+### Privy App ID
+
+Privy App ID hiện tại: `cmewiuzl900mylc0csry901tg`
+
+Để thay đổi, sửa trong `frontend/src/main.tsx`:
+
+```typescript
+<PrivyProvider
+  appId="YOUR_PRIVY_APP_ID"
+  ...
+/>
 ```
 
-## 🎯 Sử dụng
+### Token Registry Address
 
-1. Đảm bảo backend đang chạy với đủ USDC
-2. Mở http://localhost:5173
-3. Nhấn button "Send me $5 USDC"
-4. Nhập email của bạn
-5. Xem transaction thật trên Arcscan!
+Địa chỉ TokenRegistry mặc định: `0x85667fc0ad255789814B952D73DFe91bd9A58C21`
 
-**Transaction hash sẽ link đến**: https://testnet.arcscan.app
+Để thay đổi, sửa trong `frontend/src/registryConfig.ts`:
 
-⏱️ **Finality**: <1 giây trên Arc!
+```typescript
+export const REGISTRY_ADDRESS = '0xYourRegistryAddress';
+```
 
-## 📚 Arc Network
+Hoặc nó sẽ tự động load từ `localStorage.getItem('registryAddress')` khi deploy.
 
-Arc là Layer-1 blockchain EVM-compatible với:
-- **USDC as gas**: Phí giao dịch bằng stablecoin
-- **Deterministic finality**: Giao dịch finalize <1 giây
-- **Enterprise-grade**: Built bởi Circle
+## 📊 Network Info
 
-### Contract Addresses
+**Arc Testnet**
 
-| Contract | Address | Decimals |
-|----------|---------|----------|
-| USDC | `0x3600000000000000000000000000000000000000` | 6 |
-| EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | 6 |
-
-### Network Details
-
-- **RPC**: https://rpc.testnet.arc.network
+- **RPC URL**: https://rpc.testnet.arc.network
 - **Chain ID**: 5042002
 - **Explorer**: https://testnet.arcscan.app
 - **Faucet**: https://faucet.circle.com
+- **Native Currency**: USDC (18 decimals on-chain, 6 decimals for display)
 
-## 🔧 Scripts
-
-### Backend
-
-```bash
-npm run dev      # Development mode với hot reload
-npm run build    # Build TypeScript
-npm start        # Production mode
-```
+## 🛠️ Tech Stack
 
 ### Frontend
+- **React** 18.2
+- **TypeScript** 5.2
+- **Vite** 5.0
+- **Ethers.js** 6.15 - Blockchain interaction
+- **Privy** 3.5 - Wallet & Authentication
+- **Viem** 2.38 - Chain configuration
 
-```bash
-npm run dev      # Development server
-npm run build    # Production build
-npm run preview  # Preview production build
-```
-
-### Contracts
-
-```bash
-forge build      # Compile contracts
-forge test       # Run tests
-forge script     # Deploy scripts
-```
+### Smart Contracts
+- **Solidity** 0.8.30
+- **Hardhat** / **solc** - Compilation
+- **ERC-20** Standard tokens
 
 ## 📂 Cấu trúc thư mục
 
 ```
 arc-payusdc/
-├── backend/
-│   ├── src/
-│   │   └── server.ts       # Express API server
-│   ├── package.json
-│   └── tsconfig.json
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx         # Main React component
-│   │   ├── main.tsx
-│   │   └── index.css
+│   │   ├── App.tsx              # Main application component
+│   │   ├── DeployToken.tsx      # Token deployment component
+│   │   ├── DeployRegistry.tsx   # Registry deployment component
+│   │   ├── registryConfig.ts    # Registry address & ABI
+│   │   └── main.tsx             # Privy setup & entry point
 │   ├── package.json
 │   └── vite.config.ts
 ├── contracts/
 │   ├── src/
-│   │   ├── Faucet.sol      # USDC Faucet contract
-│   │   └── Faucet.t.sol    # Tests
-│   └── foundry.toml
+│   │   ├── SimpleToken.sol      # ERC-20 token contract
+│   │   └── TokenRegistry.sol    # Token registry contract
+│   ├── SimpleToken.json         # Compiled ABI & bytecode
+│   ├── TokenRegistry.json       # Compiled ABI & bytecode
+│   └── compile-*.js             # Compilation scripts
 └── README.md
 ```
 
 ## 🔒 Bảo mật
 
-⚠️ **Chú ý**: Dự án này yêu cầu **REAL MODE** - gửi USDC thật trên Arc Testnet!
+- **Private Keys**: Không bao giờ được lưu trữ hoặc gửi lên server
+- **MetaMask**: Tất cả transactions được ký trong MetaMask
+- **Privy Embedded Wallet**: Sử dụng MPC (Multi-Party Computation) cho bảo mật
+- **On-chain Registry**: Tất cả token data được lưu trữ on-chain, không phụ thuộc backend
 
-**Yêu cầu:**
-- ✅ FUNDER_PRIVATE_KEY bắt buộc (không có mock)
-- ✅ Test USDC từ faucet
-- ✅ Wallet có USDC để fund users
+## 🐛 Troubleshooting
 
-**Setup Real Mode:**
-1. Nhận test USDC: https://faucet.circle.com
-2. Tạo wallet: `cast wallet new` trong thư mục `contracts/`
-3. Copy private key vào `.env`: `FUNDER_PRIVATE_KEY=0x...`
-4. Start server → Sẽ check balance và exit nếu thiếu USDC
+### MetaMask không tự động chuyển network
 
-**Tính năng:**
-- ✅ Tạo wallet từ email (deterministic hash-based)
-- ✅ Smart account addresses (deterministic)
-- ✅ **Real USDC transfers** trên Arc Testnet
-- ✅ Instant finality (<1 second)
-- ✅ Arcscan explorer links
-- ✅ Balance checking & validation
+- Kiểm tra xem MetaMask đã có Arc Testnet chưa
+- Nếu chưa, ứng dụng sẽ tự động thêm network
+- Đảm bảo bạn đã approve request switch network
 
-**Production-ready features:**
-- Đã dùng real Arc RPC và native USDC transfers
-- Có thể tích hợp: Circle Wallets, Zerodev, Pimlico SDKs
-- Cần thêm: Rate limiting, auth, monitoring, compliance
+### Không thấy tokens trong balance
+
+- Đảm bảo bạn đã deploy TokenRegistry trước
+- Check xem token đã được đăng ký vào Registry chưa
+- Refresh balance bằng cách click "Refresh" button
+- Kiểm tra Arcscan để verify balance on-chain
+
+### Transaction history không hiển thị
+
+- Đảm bảo wallet đang kết nối đúng
+- Check Arcscan API có đang hoạt động không
+- Thử refresh lại
 
 ## 🤝 Đóng góp
 
 PRs welcome! Vui lòng:
 1. Fork project
-2. Tạo feature branch
-3. Commit changes
-4. Push và tạo PR
+2. Tạo feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open Pull Request
 
 ## 📄 License
 
@@ -239,63 +298,18 @@ MIT
 
 ## 🙏 Credits
 
-- **Arc Network**: Circle's stablecoin-native L1
-- **Zerodev**: Account Abstraction SDK
-- **Pimlico**: Paymaster infrastructure
-- **Circle Wallets**: Wallet-as-a-service
+- **Arc Network**: Stablecoin-native Layer-1 blockchain by Circle
+- **Privy**: Wallet infrastructure and authentication
+- **Ethers.js**: Ethereum JavaScript library
+- **React**: UI framework
 
 ## 📖 Documentation
 
-- [Arc Docs](https://docs.arc.network)
+- [Arc Network Docs](https://docs.arc.network)
 - [Arc Explorer](https://testnet.arcscan.app)
-- [Circle Developer Portal](https://developers.circle.com)
-
-## 🐛 Troubleshooting
-
-### Backend không start
-
-```bash
-# Check Node version
-node --version  # Should be >= 18
-
-# Clear cache
-rm -rf node_modules package-lock.json
-npm install
-
-# Check .env file
-cat backend/.env
-```
-
-### Frontend không kết nối backend
-
-```bash
-# Check CORS settings trong backend/src/server.ts
-# Check backend đang chạy ở port 3001
-curl http://localhost:3001/health
-```
-
-### Contract deployment failed
-
-```bash
-# Check Foundry installed
-forge --version
-
-# Check Arc RPC
-curl -X POST https://rpc.testnet.arc.network \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'
-
-# Get testnet USDC từ faucet
-# https://faucet.circle.com
-```
-
-## 📞 Support
-
-- Discord: [Arc Community](https://discord.gg/arc)
-- Email: support@circle.com
-- Twitter: [@ArcNetwork](https://twitter.com/ArcNetwork)
+- [Privy Docs](https://docs.privy.io)
+- [Ethers.js Docs](https://docs.ethers.org)
 
 ---
 
 **Built with ❤️ on Arc Network**
-

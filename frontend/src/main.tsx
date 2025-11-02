@@ -42,16 +42,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         },
         embeddedWallets: {
           ethereum: {
-            createOnLogin: 'all-users',
+            createOnLogin: 'users-without-wallets', // Only create embedded wallet if user doesn't have external wallet
           },
         },
         defaultChain: arcTestnet,
         supportedChains: [arcTestnet],
-        externalWallets: {
-          solana: {
-            connect: false,
-          },
-        },
       }}
     >
       <App />

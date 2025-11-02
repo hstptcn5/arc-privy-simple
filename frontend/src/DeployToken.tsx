@@ -25,7 +25,15 @@ const SimpleTokenABI = [
 
 export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
   const { wallets } = useWallets();
+  // Get wallet - prioritize external wallets (MetaMask, etc.) over embedded wallet
+  // First, try to find external wallet (MetaMask, WalletConnect, etc.)
+  const externalWallet = wallets.find(w => w.walletClientType !== 'privy' && w.walletClientType !== undefined);
+  
+  // If no external wallet, use embedded wallet
   const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
+  
+  // Prioritize external wallet
+  const wallet = externalWallet || embeddedWallet;
   
   const [tokenName, setTokenName] = useState('');
   const [tokenSymbol, setTokenSymbol] = useState('');
@@ -55,7 +63,7 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
   }, [registryAddress]);
 
   const deployToken = async () => {
-    if (!embeddedWallet) {
+    if (!wallet) {
       setError('Please connect wallet first');
       return;
     }
@@ -83,7 +91,7 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
     setTokenBalance(null);
 
     try {
-      const provider = await embeddedWallet.getEthereumProvider();
+      const provider = await wallet.getEthereumProvider();
       const ethersProvider = new ethers.BrowserProvider(provider);
       const signer = await ethersProvider.getSigner();
       
@@ -173,9 +181,9 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
     }
   };
 
-  if (!embeddedWallet) {
+  if (!wallet) {
     return (
-      <div style={{ padding: '1rem', background: '#f8f9fa', borderRadius: '8px', textAlign: 'center' }}>
+      <div style={{ padding: '1rem', background: 'rgba(30, 41, 59, 0.6)', borderRadius: '8px', textAlign: 'center', color: '#e2e8f0', border: '1px solid rgba(71, 85, 105, 0.3)' }}>
         Please connect wallet first
       </div>
     );

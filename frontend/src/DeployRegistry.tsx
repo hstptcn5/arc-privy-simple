@@ -7,7 +7,15 @@ const TokenRegistryBytecode = `0x6080604052348015600e575f5ffd5b50611c378061001c5
 
 export default function DeployRegistry() {
   const { wallets } = useWallets();
+  // Get wallet - prioritize external wallets (MetaMask, etc.) over embedded wallet
+  // First, try to find external wallet (MetaMask, WalletConnect, etc.)
+  const externalWallet = wallets.find(w => w.walletClientType !== 'privy' && w.walletClientType !== undefined);
+  
+  // If no external wallet, use embedded wallet
   const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
+  
+  // Prioritize external wallet
+  const wallet = externalWallet || embeddedWallet;
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -15,7 +23,7 @@ export default function DeployRegistry() {
   const [registryAddress, setRegistryAddress] = useState(localStorage.getItem('registryAddress') || '');
 
   const deployRegistry = async () => {
-    if (!embeddedWallet) {
+    if (!wallet) {
       setError('Please connect wallet first');
       return;
     }
@@ -25,7 +33,7 @@ export default function DeployRegistry() {
     setDeployedAddress('');
 
     try {
-      const provider = await embeddedWallet.getEthereumProvider();
+      const provider = await wallet.getEthereumProvider();
       const ethersProvider = new ethers.BrowserProvider(provider);
       const signer = await ethersProvider.getSigner();
       
@@ -51,7 +59,7 @@ export default function DeployRegistry() {
     }
   };
 
-  if (!embeddedWallet) {
+  if (!wallet) {
     return null;
   }
 
