@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
+import DeployToken from './DeployToken';
 
 const USDC_NATIVE_DECIMALS = 18; // Native USDC uses 18 decimals on Arc
 const USDC_DISPLAY_DECIMALS = 6; // Display format
@@ -413,6 +414,8 @@ function App() {
             </div>
           </div>
         )}
+
+        <DeployToken />
 
         <div style={{ 
           marginTop: '2rem', 

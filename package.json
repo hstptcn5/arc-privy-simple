@@ -26,6 +26,8 @@
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "solc": "^0.8.30"
   }
 }
-
