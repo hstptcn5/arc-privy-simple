@@ -161,21 +161,36 @@ cd arc-payusdc
 ```bash
 cd frontend
 npm install
+```
+
+### 3. Run Development Server
+
+From the root directory:
+
+```bash
 npm run dev
 ```
 
-Frontend will run at: http://localhost:5173
+This will start the frontend development server on **http://localhost:5173**.
 
-### 3. Deploy TokenRegistry (If not already deployed)
+**Note**: The frontend connects directly to the Arc blockchain via Privy and doesn't require a separate backend server. If you need backend API features, you can run both:
 
-1. Open the application and login with Privy
+```bash
+npm run dev:both
+```
+
+This runs both frontend (port 5173) and backend (port 3001) simultaneously.
+
+### 4. Deploy TokenRegistry (If not already deployed)
+
+1. Open the application at http://localhost:5173 and login with Privy
 2. Go to "Deploy" tab
 3. Click "Deploy TokenRegistry"
 4. Copy the deployed address and update `frontend/src/registryConfig.ts`
 
 Or use the `frontend/src/DeployRegistry.tsx` component.
 
-### 4. Start Using
+### 5. Start Using
 
 1. Open http://localhost:5173
 2. Login with Privy (email or MetaMask)

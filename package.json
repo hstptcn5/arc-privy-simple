@@ -9,10 +9,12 @@
   ],
   "scripts": {
     "setup": "npm install && cd backend && npm install && cd ../frontend && npm install",
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "cd frontend && npm run dev",
+    "dev:both": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
     "build": "cd backend && npm run build && cd ../frontend && npm run build",
+    "start": "cd backend && npm run prod",
     "test": "cd contracts && forge test"
   },
   "keywords": [
