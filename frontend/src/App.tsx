@@ -26,7 +26,16 @@ function App() {
   const { wallets } = useWallets();
   
   // UI States
-  const [activeTab, setActiveTab] = useState<'balance' | 'send' | 'deploy'>('balance');
+  const [activeTab, setActiveTab] = useState<'balance' | 'send' | 'deploy' | 'history' | 'marketplace'>('balance');
+  
+  // History states
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  
+  // Marketplace states
+  const [allTokens, setAllTokens] = useState<any[]>([]);
+  const [loadingMarketplace, setLoadingMarketplace] = useState(false);
+  const [marketplaceSearch, setMarketplaceSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SendResult | null>(null);
   const [error, setError] = useState<string>('');
@@ -266,6 +275,96 @@ function App() {
     }
   };
 
+  // Load transaction history from Arcscan API
+  const loadTransactionHistory = useCallback(async () => {
+    if (!embeddedWallet || !authenticated) return;
+    
+    setLoadingHistory(true);
+    try {
+      const address = embeddedWallet.address;
+      // Arcscan API endpoint for transactions
+      const response = await fetch(`https://testnet.arcscan.app/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc`);
+      const data = await response.json();
+      
+      if (data.status === '1' && data.result) {
+        // Filter and format transactions
+        const formattedTxs = data.result
+          .filter((tx: any) => tx.from.toLowerCase() === address.toLowerCase() || tx.to.toLowerCase() === address.toLowerCase())
+          .map((tx: any) => ({
+            hash: tx.hash,
+            from: tx.from,
+            to: tx.to,
+            value: ethers.formatUnits(tx.value || '0', 18),
+            timestamp: parseInt(tx.timeStamp),
+            type: tx.from.toLowerCase() === address.toLowerCase() ? 'sent' : 'received',
+            tokenAddress: null,
+            isTokenTransfer: tx.input && tx.input !== '0x' && tx.input.length > 10
+          }))
+          .slice(0, 50); // Limit to 50 most recent
+        
+        setTransactions(formattedTxs);
+      } else {
+        setTransactions([]);
+      }
+    } catch (err: any) {
+      console.error('Error loading transaction history:', err);
+      setTransactions([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [embeddedWallet, authenticated]);
+
+  // Load all tokens from Registry (Marketplace)
+  const loadAllTokens = useCallback(async () => {
+    if (!embeddedWallet || !authenticated) return;
+    
+    const registryAddr = REGISTRY_ADDRESS || localStorage.getItem('registryAddress') || '';
+    if (!registryAddr || !ethers.isAddress(registryAddr)) {
+      setAllTokens([]);
+      return;
+    }
+
+    setLoadingMarketplace(true);
+    try {
+      const provider = await embeddedWallet.getEthereumProvider();
+      const ethersProvider = new ethers.BrowserProvider(provider);
+      
+      const registry = new ethers.Contract(registryAddr, REGISTRY_ABI, ethersProvider);
+      const [addresses, infos] = await registry.getAllTokens();
+      
+      const tokens = infos.map((info: any) => ({
+        address: info.tokenAddress,
+        deployer: info.deployer,
+        name: info.name,
+        symbol: info.symbol,
+        decimals: Number(info.decimals),
+        initialSupply: info.initialSupply.toString(),
+        deployTimestamp: Number(info.deployTimestamp),
+        isOwned: deployedTokens.some(t => t.address === info.tokenAddress)
+      }));
+      
+      setAllTokens(tokens);
+    } catch (err: any) {
+      console.error('Error loading all tokens:', err);
+      setAllTokens([]);
+    } finally {
+      setLoadingMarketplace(false);
+    }
+  }, [embeddedWallet, authenticated, deployedTokens]);
+
+  // Load history when tab is activated
+  useEffect(() => {
+    if (activeTab === 'history' && authenticated && embeddedWallet) {
+      loadTransactionHistory();
+    }
+  }, [activeTab, authenticated, embeddedWallet, loadTransactionHistory]);
+
+  // Load marketplace when tab is activated
+  useEffect(() => {
+    if (activeTab === 'marketplace' && authenticated && embeddedWallet) {
+      loadAllTokens();
+    }
+  }, [activeTab, authenticated, embeddedWallet, loadAllTokens]);
 
   // Load token balances
   const loadTokenBalances = useCallback(async (tokens: DeployedToken[]) => {
@@ -704,6 +803,40 @@ function App() {
           >
             🪙 Deploy
           </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            style={{
+              padding: '0.75rem 1.5rem',
+              fontSize: '1rem',
+              fontWeight: 600,
+              background: activeTab === 'history' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
+              color: activeTab === 'history' ? 'white' : '#666',
+              border: 'none',
+              borderBottom: activeTab === 'history' ? '3px solid transparent' : '3px solid transparent',
+              borderRadius: '8px 8px 0 0',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            📜 History
+          </button>
+          <button
+            onClick={() => setActiveTab('marketplace')}
+            style={{
+              padding: '0.75rem 1.5rem',
+              fontSize: '1rem',
+              fontWeight: 600,
+              background: activeTab === 'marketplace' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'transparent',
+              color: activeTab === 'marketplace' ? 'white' : '#666',
+              border: 'none',
+              borderBottom: activeTab === 'marketplace' ? '3px solid transparent' : '3px solid transparent',
+              borderRadius: '8px 8px 0 0',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            🏪 Marketplace
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -1055,6 +1188,234 @@ function App() {
             <DeployRegistry />
             <DeployToken onDeploySuccess={handleTokenDeployed} />
           </>
+        )}
+
+        {activeTab === 'history' && embeddedWallet && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Transaction History</h2>
+              <button
+                onClick={() => loadTransactionHistory()}
+                disabled={loadingHistory}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.85rem',
+                  background: loadingHistory ? '#ccc' : '#667eea',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: loadingHistory ? 'not-allowed' : 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                {loadingHistory ? '🔄 Loading...' : '🔄 Refresh'}
+              </button>
+            </div>
+
+            {loadingHistory ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+                Loading transaction history...
+              </div>
+            ) : transactions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+                No transactions found
+              </div>
+            ) : (
+              <div>
+                {transactions.map((tx, idx) => (
+                  <div
+                    key={tx.hash}
+                    style={{
+                      padding: '1rem',
+                      marginBottom: '0.75rem',
+                      background: '#f8f9fa',
+                      borderRadius: '8px',
+                      border: '1px solid #e0e0e0'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
+                      <div>
+                        <div style={{ 
+                          fontSize: '0.9rem', 
+                          fontWeight: 600,
+                          color: tx.type === 'sent' ? '#e74c3c' : '#27ae60',
+                          marginBottom: '0.25rem'
+                        }}>
+                          {tx.type === 'sent' ? '📤 Sent' : '📥 Received'}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#666', fontFamily: 'monospace', marginTop: '0.25rem' }}>
+                          {tx.type === 'sent' ? (
+                            <>To: {tx.to.slice(0, 6)}...{tx.to.slice(-4)}</>
+                          ) : (
+                            <>From: {tx.from.slice(0, 6)}...{tx.from.slice(-4)}</>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '1rem', fontWeight: 600, color: '#667eea' }}>
+                          {parseFloat(tx.value) > 0 ? `${parseFloat(tx.value).toFixed(6)} USDC` : 'Token Transfer'}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '0.25rem' }}>
+                          {new Date(tx.timestamp * 1000).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                    <a
+                      href={`https://testnet.arcscan.app/tx/${tx.hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: '0.85rem',
+                        color: '#667eea',
+                        textDecoration: 'none',
+                        fontFamily: 'monospace'
+                      }}
+                    >
+                      {tx.hash.slice(0, 10)}...{tx.hash.slice(-8)} →
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'marketplace' && embeddedWallet && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Token Marketplace</h2>
+              <button
+                onClick={() => loadAllTokens()}
+                disabled={loadingMarketplace}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.85rem',
+                  background: loadingMarketplace ? '#ccc' : '#667eea',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: loadingMarketplace ? 'not-allowed' : 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                {loadingMarketplace ? '🔄 Loading...' : '🔄 Refresh'}
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <input
+                type="text"
+                placeholder="Search tokens by name or symbol..."
+                value={marketplaceSearch}
+                onChange={(e) => setMarketplaceSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  fontSize: '1rem',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            {loadingMarketplace ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+                Loading tokens...
+              </div>
+            ) : allTokens.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+                No tokens found in Registry. Deploy a TokenRegistry first!
+              </div>
+            ) : (
+              <div>
+                {allTokens
+                  .filter((token) => {
+                    if (!marketplaceSearch) return true;
+                    const search = marketplaceSearch.toLowerCase();
+                    return token.name.toLowerCase().includes(search) || 
+                           token.symbol.toLowerCase().includes(search) ||
+                           token.address.toLowerCase().includes(search);
+                  })
+                  .map((token) => (
+                    <div
+                      key={token.address}
+                      style={{
+                        padding: '1rem',
+                        marginBottom: '0.75rem',
+                        background: token.isOwned ? '#f0f7ff' : '#f8f9fa',
+                        borderRadius: '8px',
+                        border: `1px solid ${token.isOwned ? '#667eea' : '#e0e0e0'}`
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <div style={{ fontSize: '1rem', fontWeight: 600 }}>
+                              {token.name} ({token.symbol})
+                            </div>
+                            {token.isOwned && (
+                              <span style={{ 
+                                fontSize: '0.75rem', 
+                                background: '#667eea', 
+                                color: 'white', 
+                                padding: '0.15rem 0.5rem', 
+                                borderRadius: '12px',
+                                fontWeight: 600
+                              }}>
+                                Your Token
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#666', fontFamily: 'monospace', marginBottom: '0.25rem' }}>
+                            {token.address.slice(0, 8)}...{token.address.slice(-6)}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#999', marginBottom: '0.25rem' }}>
+                            Deployer: {token.deployer.slice(0, 6)}...{token.deployer.slice(-4)}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                            Initial Supply: {ethers.formatUnits(token.initialSupply, token.decimals)} {token.symbol}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#999', marginTop: '0.25rem' }}>
+                            Deployed: {new Date(token.deployTimestamp * 1000).toLocaleString()}
+                          </div>
+                        </div>
+                        <div style={{ marginLeft: '1rem' }}>
+                          <a
+                            href={`https://testnet.arcscan.app/address/${token.address}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-block',
+                              padding: '0.5rem 1rem',
+                              fontSize: '0.85rem',
+                              background: '#667eea',
+                              color: 'white',
+                              textDecoration: 'none',
+                              borderRadius: '6px',
+                              fontWeight: 600
+                            }}
+                          >
+                            View →
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                {allTokens.filter((token) => {
+                  if (!marketplaceSearch) return true;
+                  const search = marketplaceSearch.toLowerCase();
+                  return token.name.toLowerCase().includes(search) || 
+                         token.symbol.toLowerCase().includes(search) ||
+                         token.address.toLowerCase().includes(search);
+                }).length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+                    No tokens match your search
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         <div style={{ 
