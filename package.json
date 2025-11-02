@@ -17,6 +17,9 @@
     "start": "cd backend && npm run prod",
     "test": "cd contracts && forge test"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "keywords": [
     "arc",
     "usdc",

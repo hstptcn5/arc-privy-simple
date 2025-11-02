@@ -671,7 +671,7 @@ function App() {
   }, [authenticated, loadTokensFromRegistry]);
 
   // Handle token deployment success
-  const handleTokenDeployed = useCallback(async (address: string, txHash: string, name: string, symbol: string, decimals: number) => {
+  const handleTokenDeployed = useCallback(async (address: string, _txHash: string, name: string, symbol: string, decimals: number) => {
     // Reload tokens from Registry (if available) or add to state
     const registryAddr = REGISTRY_ADDRESS || localStorage.getItem('registryAddress') || '';
     
@@ -1257,7 +1257,7 @@ function App() {
                   gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
                   gap: '1rem' 
                 }}>
-                  {deployedTokens.map((token, idx) => (
+                  {deployedTokens.map((token) => (
                     <div 
                       key={token.address} 
                       style={{ 
@@ -1606,7 +1606,7 @@ function App() {
               </div>
             ) : (
               <div>
-                {transactions.map((tx, idx) => (
+                {transactions.map((tx) => (
                   <div
                     key={tx.hash}
                     style={{
