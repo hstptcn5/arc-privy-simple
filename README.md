@@ -236,6 +236,21 @@ Or use the `frontend/src/DeployRegistry.tsx` component.
 4. Your owned tokens will be highlighted
 5. Click on token to view on Arcscan
 
+## Configuration
+
+### Privy App ID
+
+Current Privy App ID: `cmewiuzl900mylc0csry901tg`
+
+To change, edit `frontend/src/main.tsx`:
+
+```typescript
+<PrivyProvider
+  appId="YOUR_PRIVY_APP_ID"
+  ...
+/>
+```
+
 ### Token Registry Address
 
 Default TokenRegistry address: `0x85667fc0ad255789814B952D73DFe91bd9A58C21`
@@ -302,6 +317,24 @@ arc-payusdc/
 - **MetaMask**: All transactions are signed in MetaMask
 - **Privy Embedded Wallet**: Uses MPC (Multi-Party Computation) for security
 - **On-chain Registry**: All token data stored on-chain, no backend dependency
+
+## Deploy to Vercel
+
+### Method 1: Using Vercel Dashboard (Recommended)
+
+1. Go to [Vercel Dashboard](https://vercel.com)
+2. Import your Git repository
+3. **Important**: In Project Settings → General:
+   - **Root Directory**: Set to `frontend`
+   - **Framework Preset**: Leave as "Other" or "Vite"
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+   - **Install Command**: `npm install`
+4. Deploy!
+
+### Method 2: Using vercel.json (Current Setup)
+
+The project includes a `vercel.json` file. Make sure to set **Root Directory** to `frontend` in Vercel Dashboard Settings.
 
 ## Contributing
 
