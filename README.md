@@ -320,21 +320,32 @@ arc-payusdc/
 
 ## Deploy to Vercel
 
-### Method 1: Using Vercel Dashboard (Recommended)
+### Step-by-Step Guide
 
 1. Go to [Vercel Dashboard](https://vercel.com)
-2. Import your Git repository
-3. **Important**: In Project Settings → General:
-   - **Root Directory**: Set to `frontend`
-   - **Framework Preset**: Leave as "Other" or "Vite"
+2. Click **"Add New Project"** or **"Import Project"**
+3. Import your Git repository (GitHub, GitLab, or Bitbucket)
+4. **IMPORTANT - Configure Build Settings**:
+   
+   In the **"Configure Project"** page, click **"Override"** next to any setting, then set:
+   
+   - **Root Directory**: Click "Override" → Browse → Select `frontend` folder → Save
+   - **Framework Preset**: Leave as **"Other"** (or select "Vite" if available)
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
    - **Install Command**: `npm install`
-4. Deploy!
+   
+5. Click **"Deploy"**
 
-### Method 2: Using vercel.json (Current Setup)
+### Troubleshooting
 
-The project includes a `vercel.json` file. Make sure to set **Root Directory** to `frontend` in Vercel Dashboard Settings.
+If you get errors:
+
+- **"Cannot read properties"**: Make sure Root Directory is set to `frontend` (not root)
+- **"Command exited with 1"**: Check that `frontend/package.json` exists
+- **"Cannot find module"**: Ensure all dependencies are in `frontend/package.json`
+
+**Important**: The Root Directory MUST be set to `frontend` - this is the most common cause of errors!
 
 ## Contributing
 
