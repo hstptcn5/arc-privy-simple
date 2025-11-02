@@ -325,27 +325,34 @@ arc-payusdc/
 1. Go to [Vercel Dashboard](https://vercel.com)
 2. Click **"Add New Project"** or **"Import Project"**
 3. Import your Git repository (GitHub, GitLab, or Bitbucket)
-4. **IMPORTANT - Configure Build Settings**:
+4. **CRITICAL - Configure Build Settings**:
    
-   In the **"Configure Project"** page, click **"Override"** next to any setting, then set:
+   In the **"Configure Project"** page:
    
-   - **Root Directory**: Click "Override" → Browse → Select `frontend` folder → Save
-   - **Framework Preset**: Leave as **"Other"** (or select "Vite" if available)
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-   - **Install Command**: `npm install`
+   - **Root Directory**: Click **"Override"** → Type: `frontend` → Save
+   - **Framework Preset**: Click **"Override"** → Select **"Other"** (DO NOT select "Vite")
+   - **Build Command**: Click **"Override"** → Type: `npm run build`
+   - **Output Directory**: Click **"Override"** → Type: `dist`
+   - **Install Command**: Click **"Override"** → Type: `npm install`
    
 5. Click **"Deploy"**
+
+### Important Notes
+
+- **Root Directory MUST be `frontend`** - This is critical!
+- **Framework Preset MUST be "Other"** - Not "Vite" or any other framework
+- Vercel will automatically detect the static files after build
 
 ### Troubleshooting
 
 If you get errors:
 
+- **"No entrypoint found"**: Framework Preset must be "Other", not "Vite". Also ensure Root Directory is `frontend`
 - **"Cannot read properties"**: Make sure Root Directory is set to `frontend` (not root)
-- **"Command exited with 1"**: Check that `frontend/package.json` exists
+- **"Command exited with 1"**: Check that `frontend/package.json` exists and dependencies are correct
 - **"Cannot find module"**: Ensure all dependencies are in `frontend/package.json`
 
-**Important**: The Root Directory MUST be set to `frontend` - this is the most common cause of errors!
+**Most common fix**: Delete the project on Vercel, create a new one, and set Framework Preset to "Other" (not Vite)!
 
 ## Contributing
 
