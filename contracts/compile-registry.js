@@ -3,14 +3,14 @@ const fs = require('fs');
 const path = require('path');
 
 // Read the source file
-const contractPath = path.join(__dirname, 'src/SimpleToken.sol');
+const contractPath = path.join(__dirname, 'src/TokenRegistry.sol');
 const sourceCode = fs.readFileSync(contractPath, 'utf8');
 
 // Compile the contract
 const input = {
   language: 'Solidity',
   sources: {
-    'SimpleToken.sol': {
+    'TokenRegistry.sol': {
       content: sourceCode
     }
   },
@@ -23,7 +23,7 @@ const input = {
   }
 };
 
-console.log('Compiling SimpleToken.sol...');
+console.log('Compiling TokenRegistry.sol...');
 const output = JSON.parse(solc.compile(JSON.stringify(input)));
 
 // Check for errors
@@ -37,7 +37,7 @@ if (output.errors) {
 }
 
 // Get the contract info
-const contract = output.contracts['SimpleToken.sol'].SimpleToken;
+const contract = output.contracts['TokenRegistry.sol'].TokenRegistry;
 const abi = contract.abi;
 const bytecode = contract.evm.bytecode.object;
 
@@ -46,8 +46,7 @@ console.log('\nBytecode:', bytecode);
 console.log('\nABI:', JSON.stringify(abi, null, 2));
 
 // Save to JSON file
-const outputPath = path.join(__dirname, 'SimpleToken.json');
+const outputPath = path.join(__dirname, 'TokenRegistry.json');
 fs.writeFileSync(outputPath, JSON.stringify({ abi, bytecode }, null, 2));
 console.log('\n💾 Saved to:', outputPath);
-
 
