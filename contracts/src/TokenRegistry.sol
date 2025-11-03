@@ -15,6 +15,7 @@ contract TokenRegistry {
         uint8 decimals;
         uint256 initialSupply;
         uint256 deployTimestamp;
+        address poolAddress; // Address of the AMM pool (if exists)
     }
 
     // Array of all token addresses
@@ -64,7 +65,8 @@ contract TokenRegistry {
             symbol: symbol,
             decimals: decimals,
             initialSupply: initialSupply,
-            deployTimestamp: block.timestamp
+            deployTimestamp: block.timestamp,
+            poolAddress: address(0) // Will be set when pool is created
         });
         
         tokenInfo[tokenAddress] = info;
@@ -127,6 +129,18 @@ contract TokenRegistry {
      */
     function getTokenCountByDeployer(address deployer) external view returns (uint256 count) {
         return tokensByDeployer[deployer].length;
+    }
+    
+    /**
+     * @notice Set pool address for a registered token
+     * @param tokenAddress Address of the token
+     * @param poolAddress Address of the AMM pool
+     */
+    function setPoolAddress(address tokenAddress, address poolAddress) external {
+        require(isRegistered[tokenAddress], "Token not registered");
+        require(poolAddress != address(0), "Invalid pool address");
+        // Only deployer or pool contract itself can set
+        tokenInfo[tokenAddress].poolAddress = poolAddress;
     }
 }
 

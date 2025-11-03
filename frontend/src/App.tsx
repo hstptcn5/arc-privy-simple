@@ -3,7 +3,11 @@ import { ethers } from 'ethers';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import DeployToken from './DeployToken';
 import DeployRegistry from './DeployRegistry';
+import DeployAMM from './DeployAMM';
 import { REGISTRY_ADDRESS, REGISTRY_ABI } from './registryConfig';
+import { AMM_ADDRESS, AMM_ABI } from './ammConfig';
+import BuySellToken from './BuySellToken';
+import TokenDetail from './TokenDetail';
 
 const USDC_NATIVE_DECIMALS = 18; // Native USDC uses 18 decimals on Arc
 const USDC_DISPLAY_DECIMALS = 6; // Display format
@@ -36,6 +40,10 @@ function App() {
   const [allTokens, setAllTokens] = useState<any[]>([]);
   const [loadingMarketplace, setLoadingMarketplace] = useState(false);
   const [marketplaceSearch, setMarketplaceSearch] = useState('');
+  const [creatingPoolFor, setCreatingPoolFor] = useState<string | null>(null);
+  const [poolLiquidityTokens, setPoolLiquidityTokens] = useState('');
+  const [poolLiquidityUSDC, setPoolLiquidityUSDC] = useState('');
+  const [selectedTokenDetail, setSelectedTokenDetail] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SendResult | null>(null);
   const [error, setError] = useState<string>('');
@@ -443,18 +451,98 @@ function App() {
         
         // Check if we got valid data
         if (addresses && infos && Array.isArray(addresses) && Array.isArray(infos) && addresses.length > 0) {
-          const tokens = infos.map((info: any) => ({
-            address: info.tokenAddress,
-            deployer: info.deployer,
-            name: info.name,
-            symbol: info.symbol,
-            decimals: Number(info.decimals),
-            initialSupply: info.initialSupply.toString(),
-            deployTimestamp: Number(info.deployTimestamp),
-            isOwned: deployedTokens.some(t => t.address === info.tokenAddress)
-          }));
+          // Load prices from AMM if available
+          const tokensWithPrices = await Promise.all(
+            infos.map(async (info: any) => {
+              const tokenAddress = info.tokenAddress;
+              let price: string | null = null;
+              let poolExists = false;
+              
+              // Try to get price from AMM - get AMM address at runtime from localStorage
+              const currentAmmAddress = localStorage.getItem('ammAddress') || AMM_ADDRESS || '0x0249C38Cbbf8623CB4BE09d7ad4002B8517ce5b5';
+              if (currentAmmAddress && ethers.isAddress(currentAmmAddress)) {
+                // First check poolAddress from registry
+                if (info.poolAddress && ethers.isAddress(info.poolAddress) && info.poolAddress !== ethers.ZeroAddress) {
+                  // Registry has pool address, so pool should exist
+                  poolExists = true;
+                  console.log(`Token ${tokenAddress}: pool exists (from registry): ${info.poolAddress}`);
+                  
+                  // Try to get price with retry logic
+                  let retries = 3;
+                  while (retries > 0) {
+                    try {
+                      const ammContract = new ethers.Contract(currentAmmAddress, AMM_ABI, ethersProvider);
+                      const exists = await ammContract.poolExists(tokenAddress);
+                      poolExists = exists;
+                      
+                      if (exists) {
+                        const priceWei = await ammContract.getPrice(tokenAddress);
+                        price = ethers.formatUnits(priceWei, USDC_NATIVE_DECIMALS);
+                        console.log(`Token ${tokenAddress}: price = ${price} USDC`);
+                        break; // Success, exit retry loop
+                      } else {
+                        console.warn(`Token ${tokenAddress}: registry has pool address but AMM says pool doesn't exist`);
+                      }
+                    } catch (err: any) {
+                      retries--;
+                      if (retries === 0) {
+                        console.error(`Error loading price for ${tokenAddress} after retries:`, err);
+                        // If registry says pool exists, trust it even if we can't verify
+                        if (info.poolAddress && info.poolAddress !== ethers.ZeroAddress) {
+                          poolExists = true;
+                        }
+                      } else {
+                        console.warn(`Retrying poolExists check for ${tokenAddress} (${3 - retries}/3)...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+                      }
+                    }
+                  }
+                } else {
+                  // No pool address in registry, check AMM directly with retry
+                  let retries = 3;
+                  while (retries > 0) {
+                    try {
+                      const ammContract = new ethers.Contract(currentAmmAddress, AMM_ABI, ethersProvider);
+                      const exists = await ammContract.poolExists(tokenAddress);
+                      poolExists = exists;
+                      console.log(`Token ${tokenAddress}: poolExists = ${exists}, AMM = ${currentAmmAddress}`);
+                      
+                      if (exists) {
+                        const priceWei = await ammContract.getPrice(tokenAddress);
+                        price = ethers.formatUnits(priceWei, USDC_NATIVE_DECIMALS);
+                        console.log(`Token ${tokenAddress}: price = ${price} USDC`);
+                      }
+                      break; // Success, exit retry loop
+                    } catch (err: any) {
+                      retries--;
+                      if (retries === 0) {
+                        console.error(`Error loading price for ${tokenAddress} after retries:`, err);
+                        console.error(`AMM Address used: ${currentAmmAddress}`);
+                      } else {
+                        console.warn(`Retrying poolExists check for ${tokenAddress} (${3 - retries}/3)...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+                      }
+                    }
+                  }
+                }
+              }
+              
+              return {
+                address: tokenAddress,
+                deployer: info.deployer,
+                name: info.name,
+                symbol: info.symbol,
+                decimals: Number(info.decimals),
+                initialSupply: info.initialSupply.toString(),
+                deployTimestamp: Number(info.deployTimestamp),
+                isOwned: deployedTokens.some(t => t.address === tokenAddress),
+                price: price,
+                poolExists: poolExists
+              };
+            })
+          );
           
-          setAllTokens(tokens);
+          setAllTokens(tokensWithPrices);
         } else {
           // No tokens found in Registry
           console.log('No tokens found in Registry');
@@ -475,7 +563,7 @@ function App() {
     } finally {
       setLoadingMarketplace(false);
     }
-  }, [wallet, authenticated, deployedTokens]);
+  }, [wallet, authenticated, deployedTokens, activeTab]);
 
   // Load history when tab is activated
   useEffect(() => {
@@ -490,6 +578,7 @@ function App() {
       loadAllTokens();
     }
   }, [activeTab, authenticated, wallet, loadAllTokens]);
+  
 
   // Load token balances
   const loadTokenBalances = useCallback(async (tokens: DeployedToken[]) => {
@@ -679,6 +768,10 @@ function App() {
       // If registered in Registry, reload from Registry
       setTimeout(() => {
         loadTokensFromRegistry();
+        // Also refresh marketplace to show pool status
+        if (activeTab === 'marketplace') {
+          loadAllTokens();
+        }
       }, 2000); // Wait for transaction to be mined
     } else {
       // Fallback: add to local state and localStorage
@@ -1570,6 +1663,7 @@ function App() {
         {activeTab === 'deploy' && (
           <>
             <DeployRegistry />
+            <DeployAMM />
             <DeployToken onDeploySuccess={handleTokenDeployed} />
           </>
         )}
@@ -1665,36 +1759,47 @@ function App() {
         )}
 
         {activeTab === 'marketplace' && wallet && (
-          <div style={{ padding: '2rem', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0' }}>Token Marketplace</h2>
-              <button
-                onClick={() => loadAllTokens()}
-                disabled={loadingMarketplace}
-                style={{
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.85rem',
-                  background: loadingMarketplace ? 'rgba(71, 85, 105, 0.5)' : 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: loadingMarketplace ? 'not-allowed' : 'pointer',
-                  fontWeight: 600
-                }}
-              >
-                {loadingMarketplace ? 'Loading...' : 'Refresh'}
-              </button>
-            </div>
-
-            <div style={{ marginBottom: '1rem' }}>
-              <input
-                type="text"
-                placeholder="Search tokens by name or symbol..."
-                value={marketplaceSearch}
-                onChange={(e) => setMarketplaceSearch(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
+          <>
+            {selectedTokenDetail ? (
+              <TokenDetail
+                tokenAddress={selectedTokenDetail.address}
+                tokenName={selectedTokenDetail.name}
+                tokenSymbol={selectedTokenDetail.symbol}
+                tokenDecimals={selectedTokenDetail.decimals}
+                tokenDeployer={selectedTokenDetail.deployer}
+                tokenSupply={selectedTokenDetail.initialSupply}
+                onBack={() => setSelectedTokenDetail(null)}
+              />
+            ) : (
+              <div style={{ padding: '2rem', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0' }}>Token Marketplace</h2>
+                  <button
+                    onClick={() => loadAllTokens()}
+                    disabled={loadingMarketplace}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.85rem',
+                      background: loadingMarketplace ? 'rgba(71, 85, 105, 0.5)' : 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: loadingMarketplace ? 'not-allowed' : 'pointer',
+                      fontWeight: 600
+                    }}
+                  >
+                    {loadingMarketplace ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+                <div style={{ marginBottom: '1rem' }}>
+                  <input
+                    type="text"
+                    placeholder="Search tokens by name or symbol..."
+                    value={marketplaceSearch}
+                    onChange={(e) => setMarketplaceSearch(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
                   fontSize: '1rem',
                   border: '2px solid rgba(71, 85, 105, 0.5)',
                   borderRadius: '8px',
@@ -1785,12 +1890,247 @@ function App() {
                           <div style={{ fontSize: '0.9rem', color: '#e2e8f0', fontWeight: 600, marginBottom: '0.5rem', padding: '0.5rem', background: 'rgba(129, 140, 248, 0.15)', borderRadius: '8px', border: '1px solid rgba(129, 140, 248, 0.2)' }}>
                             Supply: {ethers.formatUnits(token.initialSupply, token.decimals)} {token.symbol}
                           </div>
+                          {token.poolExists && token.price && (
+                            <div style={{ fontSize: '1rem', color: '#86efac', fontWeight: 700, marginBottom: '0.5rem', padding: '0.5rem', background: 'rgba(34, 197, 94, 0.15)', borderRadius: '8px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+                              💰 Price: {parseFloat(token.price).toFixed(6)} USDC
+                            </div>
+                          )}
+                          {token.poolExists && !token.price && (
+                            <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '0.5rem', padding: '0.5rem', background: 'rgba(30, 41, 59, 0.5)', borderRadius: '8px' }}>
+                              Pool exists - Loading price...
+                            </div>
+                          )}
+                          {!token.poolExists && (
+                            <div style={{ fontSize: '0.85rem', color: '#fca5a5', marginBottom: '0.5rem', padding: '0.5rem', background: 'rgba(239, 68, 68, 0.15)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                              ⚠️ No liquidity pool
+                            </div>
+                          )}
+                          {!token.poolExists && creatingPoolFor !== token.address && (
+                            <button
+                              onClick={() => setCreatingPoolFor(token.address)}
+                              style={{
+                                width: '100%',
+                                padding: '0.5rem 1rem',
+                                fontSize: '0.85rem',
+                                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                marginBottom: '0.5rem',
+                                boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'scale(1.05)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'scale(1)';
+                              }}
+                            >
+                              Create Pool
+                            </button>
+                          )}
+                          {!token.poolExists && creatingPoolFor === token.address && (
+                            <div style={{ 
+                              marginBottom: '0.5rem', 
+                              padding: '1rem', 
+                              background: 'rgba(245, 158, 11, 0.15)', 
+                              borderRadius: '8px',
+                              border: '1px solid rgba(245, 158, 11, 0.3)'
+                            }}>
+                              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.75rem' }}>
+                                Create Liquidity Pool for {token.symbol}
+                              </div>
+                              <div style={{ marginBottom: '0.75rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.25rem', color: '#cbd5e1', fontSize: '0.85rem' }}>
+                                  Token Amount:
+                                </label>
+                                <input
+                                  type="number"
+                                  placeholder={`Enter token amount (you have ${deployedTokens.find(t => t.address === token.address)?.balance || '0'})`}
+                                  value={poolLiquidityTokens}
+                                  onChange={(e) => setPoolLiquidityTokens(e.target.value)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '0.5rem',
+                                    fontSize: '0.9rem',
+                                    border: '2px solid rgba(71, 85, 105, 0.5)',
+                                    borderRadius: '6px',
+                                    outline: 'none',
+                                    background: 'rgba(30, 41, 59, 0.6)',
+                                    color: '#e2e8f0'
+                                  }}
+                                />
+                              </div>
+                              <div style={{ marginBottom: '0.75rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.25rem', color: '#cbd5e1', fontSize: '0.85rem' }}>
+                                  USDC Amount:
+                                </label>
+                                <input
+                                  type="number"
+                                  placeholder="Enter USDC amount (e.g. 100)"
+                                  value={poolLiquidityUSDC}
+                                  onChange={(e) => setPoolLiquidityUSDC(e.target.value)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '0.5rem',
+                                    fontSize: '0.9rem',
+                                    border: '2px solid rgba(71, 85, 105, 0.5)',
+                                    borderRadius: '6px',
+                                    outline: 'none',
+                                    background: 'rgba(30, 41, 59, 0.6)',
+                                    color: '#e2e8f0'
+                                  }}
+                                />
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button
+                                  onClick={async () => {
+                                    if (!wallet || !poolLiquidityTokens || !poolLiquidityUSDC) return;
+                                    
+                                    const currentAmmAddress = localStorage.getItem('ammAddress') || AMM_ADDRESS || '0x0249C38Cbbf8623CB4BE09d7ad4002B8517ce5b5';
+                                    if (!currentAmmAddress || !ethers.isAddress(currentAmmAddress)) {
+                                      setError('AMM contract not configured');
+                                      return;
+                                    }
+                                    
+                                    setLoading(true);
+                                    setError('');
+                                    
+                                    try {
+                                      const provider = await wallet.getEthereumProvider();
+                                      const ethersProvider = new ethers.BrowserProvider(provider);
+                                      const signer = await ethersProvider.getSigner();
+                                      
+                                      const ammContract = new ethers.Contract(currentAmmAddress, AMM_ABI, signer);
+                                      
+                                      // Get token contract
+                                      const tokenABI = [
+                                        { inputs: [{ name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }], name: 'approve', outputs: [{ type: 'bool' }], stateMutability: 'nonpayable', type: 'function' }
+                                      ];
+                                      const tokenContract = new ethers.Contract(token.address, tokenABI, signer);
+                                      
+                                      const tokenAmountWei = ethers.parseUnits(poolLiquidityTokens, token.decimals);
+                                      const usdcAmountWei = ethers.parseUnits(poolLiquidityUSDC, 18);
+                                      
+                                      // Approve
+                                      console.log(`Approving ${poolLiquidityTokens} ${token.symbol} to AMM...`);
+                                      const approveTx = await tokenContract.approve(currentAmmAddress, tokenAmountWei);
+                                      await approveTx.wait();
+                                      console.log('Approved!');
+                                      
+                                      // Create pool
+                                      console.log(`Creating pool with ${poolLiquidityTokens} ${token.symbol} and ${poolLiquidityUSDC} USDC...`);
+                                      const createPoolTx = await ammContract.createPool(token.address, tokenAmountWei, usdcAmountWei, {
+                                        value: usdcAmountWei
+                                      });
+                                      await createPoolTx.wait();
+                                      console.log('Pool created successfully!');
+                                      
+                                      // Update registry
+                                      const registryAddr = REGISTRY_ADDRESS || localStorage.getItem('registryAddress') || '';
+                                      if (registryAddr && ethers.isAddress(registryAddr)) {
+                                        try {
+                                          const registry = new ethers.Contract(registryAddr, REGISTRY_ABI, signer);
+                                          await registry.setPoolAddress(token.address, currentAmmAddress);
+                                        } catch (err) {
+                                          console.error('Failed to update pool address:', err);
+                                        }
+                                      }
+                                      
+                                      setCreatingPoolFor(null);
+                                      setPoolLiquidityTokens('');
+                                      setPoolLiquidityUSDC('');
+                                      
+                                      // Refresh marketplace
+                                      setTimeout(() => {
+                                        loadAllTokens();
+                                      }, 2000);
+                                      
+                                    } catch (err: any) {
+                                      console.error('Error creating pool:', err);
+                                      setError(`Failed to create pool: ${err.message}`);
+                                    } finally {
+                                      setLoading(false);
+                                    }
+                                  }}
+                                  disabled={loading || !poolLiquidityTokens || !poolLiquidityUSDC}
+                                  style={{
+                                    flex: 1,
+                                    padding: '0.5rem 1rem',
+                                    fontSize: '0.85rem',
+                                    background: loading || !poolLiquidityTokens || !poolLiquidityUSDC
+                                      ? 'rgba(71, 85, 105, 0.5)'
+                                      : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontWeight: 600,
+                                    cursor: loading || !poolLiquidityTokens || !poolLiquidityUSDC ? 'not-allowed' : 'pointer'
+                                  }}
+                                >
+                                  {loading ? 'Creating...' : 'Create Pool'}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setCreatingPoolFor(null);
+                                    setPoolLiquidityTokens('');
+                                    setPoolLiquidityUSDC('');
+                                  }}
+                                  style={{
+                                    padding: '0.5rem 1rem',
+                                    fontSize: '0.85rem',
+                                    background: 'rgba(71, 85, 105, 0.5)',
+                                    color: '#e2e8f0',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              {error && (
+                                <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#fca5a5' }}>
+                                  {error}
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                             Deployed: {new Date(token.deployTimestamp * 1000).toLocaleDateString()} {new Date(token.deployTimestamp * 1000).toLocaleTimeString()}
                           </div>
                         </div>
                       </div>
-                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(71, 85, 105, 0.3)' }}>
+                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(71, 85, 105, 0.3)', display: 'flex', gap: '0.5rem', flexDirection: 'column' }}>
+                        {token.poolExists && (
+                          <button
+                            onClick={() => setSelectedTokenDetail(token)}
+                            style={{
+                              width: '100%',
+                              padding: '0.75rem 1rem',
+                              fontSize: '0.9rem',
+                              background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '10px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.05)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                            }}
+                          >
+                            View Details & Trade →
+                          </button>
+                        )}
                         <a
                           href={`https://testnet.arcscan.app/address/${token.address}`}
                           target="_blank"
@@ -1842,7 +2182,9 @@ function App() {
                 )}
               </div>
             )}
-          </div>
+            </div>
+            )}
+          </>
         )}
 
         <div style={{ 

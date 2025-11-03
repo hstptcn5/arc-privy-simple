@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useWallets } from '@privy-io/react-auth';
 import { REGISTRY_ADDRESS, REGISTRY_ABI } from './registryConfig';
+import { AMM_ADDRESS, AMM_ABI } from './ammConfig';
 
 interface DeployTokenProps {
   onDeploySuccess?: (address: string, txHash: string, name: string, symbol: string, decimals: number) => void;
@@ -46,6 +47,9 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
   const [registryAddress, setRegistryAddress] = useState(() => 
     REGISTRY_ADDRESS || localStorage.getItem('registryAddress') || ''
   );
+  const [createPool, setCreatePool] = useState(true);
+  const [initialLiquidityTokens, setInitialLiquidityTokens] = useState('');
+  const [initialLiquidityUSDC, setInitialLiquidityUSDC] = useState('');
   
   // Auto-update registry address when it changes in localStorage
   useEffect(() => {
@@ -168,6 +172,52 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
         }
       } else {
         console.log('No Registry address - token deployed but not registered');
+      }
+      
+      // Create liquidity pool if AMM address is available and user enabled it
+      // Get AMM address at runtime from localStorage
+      const currentAmmAddress = localStorage.getItem('ammAddress') || AMM_ADDRESS || '0x0249C38Cbbf8623CB4BE09d7ad4002B8517ce5b5';
+      
+      if (createPool && currentAmmAddress && ethers.isAddress(currentAmmAddress)) {
+        try {
+          const liquidityTokens = initialLiquidityTokens || (parseFloat(initialSupply) * 0.5).toString(); // Default 50% of supply
+          const liquidityUSDC = initialLiquidityUSDC || '100'; // Default 100 USDC
+          
+          const liquidityTokensNum = parseFloat(liquidityTokens);
+          const liquidityUSDCNum = parseFloat(liquidityUSDC);
+          
+          if (liquidityTokensNum > 0 && liquidityUSDCNum > 0) {
+            console.log('Creating liquidity pool...');
+            const ammContract = new ethers.Contract(currentAmmAddress, AMM_ABI, signer);
+            const tokenContract = new ethers.Contract(contractAddress, SimpleTokenABI, signer);
+            
+            // Approve AMM to spend tokens
+            const tokenAmountWei = ethers.parseUnits(liquidityTokensNum.toString(), decimalsNum);
+            const approveTx = await tokenContract.approve(currentAmmAddress, tokenAmountWei);
+            await approveTx.wait();
+            
+            // Create pool
+            const usdcAmountWei = ethers.parseUnits(liquidityUSDCNum.toString(), 18);
+            const createPoolTx = await ammContract.createPool(contractAddress, tokenAmountWei, usdcAmountWei, {
+              value: usdcAmountWei
+            });
+            await createPoolTx.wait();
+            console.log('Liquidity pool created!');
+            
+            // Update registry with pool address
+            if (registryAddress && ethers.isAddress(registryAddress)) {
+              try {
+                const registry = new ethers.Contract(registryAddress, REGISTRY_ABI, signer);
+                await registry.setPoolAddress(contractAddress, currentAmmAddress);
+              } catch (err) {
+                console.error('Failed to update pool address in registry:', err);
+              }
+            }
+          }
+        } catch (poolErr: any) {
+          console.error('Failed to create liquidity pool:', poolErr);
+          // Continue even if pool creation fails
+        }
       }
       
       if (onDeploySuccess) {
@@ -312,6 +362,80 @@ export default function DeployToken({ onDeploySuccess }: DeployTokenProps) {
           }}
         />
       </div>
+      
+      {/* Liquidity Pool Options */}
+      {(() => {
+        const currentAmmAddress = localStorage.getItem('ammAddress') || AMM_ADDRESS || '0x0249C38Cbbf8623CB4BE09d7ad4002B8517ce5b5';
+        return currentAmmAddress && ethers.isAddress(currentAmmAddress);
+      })() && (
+        <div style={{ 
+          marginBottom: '1rem', 
+          padding: '1rem', 
+          background: 'rgba(34, 197, 94, 0.15)', 
+          borderRadius: '8px',
+          border: '1px solid rgba(34, 197, 94, 0.3)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <input
+              type="checkbox"
+              id="createPool"
+              checked={createPool}
+              onChange={(e) => setCreatePool(e.target.checked)}
+              disabled={loading}
+              style={{ marginRight: '0.5rem', cursor: 'pointer' }}
+            />
+            <label htmlFor="createPool" style={{ color: '#e2e8f0', fontWeight: 600, cursor: 'pointer' }}>
+              Create Liquidity Pool (Token will have price immediately)
+            </label>
+          </div>
+          {createPool && (
+            <div>
+              <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '0.5rem' }}>
+                Initial liquidity will create a pool for trading. Recommended: 50% of supply + 100 USDC
+              </div>
+              <input
+                type="number"
+                placeholder={`Token amount (default: 50% of supply = ${initialSupply ? (parseFloat(initialSupply) * 0.5).toFixed(6) : '0'})`}
+                value={initialLiquidityTokens}
+                onChange={(e) => setInitialLiquidityTokens(e.target.value)}
+                disabled={loading}
+                min="0"
+                step="0.000001"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  fontSize: '0.9rem',
+                  border: '2px solid rgba(71, 85, 105, 0.5)',
+                  borderRadius: '8px',
+                  marginBottom: '0.75rem',
+                  outline: 'none',
+                  background: 'rgba(30, 41, 59, 0.6)',
+                  color: '#e2e8f0'
+                }}
+              />
+              <input
+                type="number"
+                placeholder="USDC amount (default: 100 USDC)"
+                value={initialLiquidityUSDC}
+                onChange={(e) => setInitialLiquidityUSDC(e.target.value)}
+                disabled={loading}
+                min="0"
+                step="0.000001"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  fontSize: '0.9rem',
+                  border: '2px solid rgba(71, 85, 105, 0.5)',
+                  borderRadius: '8px',
+                  outline: 'none',
+                  background: 'rgba(30, 41, 59, 0.6)',
+                  color: '#e2e8f0'
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       <button 
         onClick={deployToken}
