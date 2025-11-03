@@ -931,7 +931,7 @@ function App() {
             backgroundClip: 'text',
             color: '#fff'
           }}>
-            Arc Onboard MVP
+            Arc Dex
           </h1>
           
           <p style={{ 
@@ -940,7 +940,7 @@ function App() {
             marginBottom: '2rem',
             fontWeight: 300
           }}>
-            Get USDC instantly – no wallet, no gas, no seed phrase
+            Token Launchpad & Trading Platform on Arc Blockchain
           </p>
 
           <button 
@@ -1024,7 +1024,7 @@ function App() {
             backgroundClip: 'text',
             color: '#fff'
           }}>
-            Arc Wallet
+            Arc Dex
           </h1>
           <button
             onClick={async () => {

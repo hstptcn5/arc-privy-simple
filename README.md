@@ -1,12 +1,12 @@
-# Arc Pay USDC - Token Wallet & Marketplace
+# Arc Dex - Token Launchpad & Trading Platform
 
-> A complete Web3 application for deploying, managing, and trading ERC-20 tokens on Arc Testnet with on-chain token registry.
+> A complete Web3 DEX application for deploying, managing, and trading ERC-20 tokens on Arc Testnet with Automated Market Maker (AMM) and on-chain token registry.
 
 **Live Demo**: [https://arc-privy-simple-backend.vercel.app/](https://arc-privy-simple-backend.vercel.app/)
 
 ## Project Overview
 
-Arc Pay USDC is a comprehensive Web3 application that enables users to:
+Arc Dex is a comprehensive decentralized exchange (DEX) that enables users to:
 
 - **Deploy ERC-20 Tokens**: Create and deploy custom tokens on Arc Testnet with just a few clicks
 - **Liquid Pricing with AMM**: Deploy tokens with instant liquidity pools using Automated Market Maker
@@ -114,11 +114,13 @@ This project serves as a complete token management and trading platform with var
 - **Pool Status**: Track which tokens have active liquidity pools
 
 ### 7. Price History & Charts
-- **Real-time Charts**: Interactive SVG charts showing 24h price history
-- **Local Storage**: Price data collected and stored in browser
-- **Automatic Updates**: Prices tracked when refreshing token details
-- **Historical Data**: View price movements over time
-- **Visual Analytics**: Easy-to-read charts with grid lines and labels
+- **TradingView Charts**: Interactive charts using Lightweight Charts library (v5)
+- **Chart Types**: Line chart and Candlestick chart (OHLC format)
+- **Timeframe Selection**: View 1h, 4h, 24h, or 7d price history
+- **Real-time Data**: Price data collected from AMM and stored in localStorage
+- **Manual Refresh**: Refresh button to collect latest price data
+- **Visual Analytics**: Professional TradingView-style charts with dark theme, crosshair, grid lines
+- **Data Grouping**: Automatic OHLC conversion for candlestick charts based on timeframe
 
 ### 8. On-chain Token Registry
 - TokenRegistry contract manages all tokens on-chain
@@ -218,7 +220,7 @@ Automated Market Maker contract using constant product formula (x * y = k):
 
 ```bash
 git clone <repository-url>
-cd arc-payusdc
+cd arc-dex
 ```
 
 ### 2. Setup Frontend

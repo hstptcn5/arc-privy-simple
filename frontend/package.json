@@ -1,7 +1,7 @@
 {
-  "name": "arc-onboard-frontend",
+  "name": "arc-dex-frontend",
   "version": "1.0.0",
-  "description": "Frontend for ARC Onboard MVP",
+  "description": "Frontend for Arc Dex - Token Launchpad & Trading Platform",
   "type": "module",
   "scripts": {
     "dev": "vite",

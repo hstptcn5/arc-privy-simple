@@ -1,7 +1,7 @@
 {
-  "name": "arc-onboard-mvp",
+  "name": "arc-dex",
   "version": "1.0.0",
-  "description": "ARC Onboard MVP - Email to $5 USDC in 3 seconds",
+  "description": "Arc Dex - Token Launchpad & Trading Platform on Arc Blockchain",
   "private": true,
   "workspaces": [
     "backend",
@@ -22,10 +22,13 @@
   },
   "keywords": [
     "arc",
-    "usdc",
-    "smart-wallet",
-    "account-abstraction",
-    "onboarding"
+    "dex",
+    "token",
+    "trading",
+    "amm",
+    "marketplace",
+    "launchpad",
+    "usdc"
   ],
   "author": "",
   "license": "MIT",
