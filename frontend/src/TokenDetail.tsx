@@ -1,6 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ethers } from 'ethers';
 import { useWallets } from '@privy-io/react-auth';
+import { 
+  createChart, 
+  ColorType, 
+  IChartApi, 
+  ISeriesApi, 
+  LineSeries,
+  // @ts-ignore - CandlestickSeries might not be in types but exists in runtime
+  CandlestickSeries 
+} from 'lightweight-charts';
 import { AMM_ADDRESS, AMM_ABI } from './ammConfig';
 import BuySellToken from './BuySellToken';
 
@@ -18,6 +27,17 @@ interface PriceDataPoint {
   timestamp: number;
   price: number;
 }
+
+interface CandlestickData {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+type ChartType = 'line' | 'candlestick';
+type Timeframe = '1h' | '4h' | '24h' | '7d';
 
 export default function TokenDetail({
   tokenAddress,
@@ -37,197 +57,189 @@ export default function TokenDetail({
   const [currentPrice, setCurrentPrice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [poolExists, setPoolExists] = useState(false);
+  const [chartType, setChartType] = useState<ChartType>('candlestick');
+  const [timeframe, setTimeframe] = useState<Timeframe>('24h');
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<'Line'> | ISeriesApi<'Candlestick'> | null>(null);
 
-  // Simple price chart using SVG
-  const PriceChart = ({ data }: { data: PriceDataPoint[] }) => {
-    if (data.length === 0) {
-      return (
-        <div style={{ 
-          height: '300px', 
-          display: 'flex', 
-          flexDirection: 'column',
-          alignItems: 'center', 
-          justifyContent: 'center',
-          background: 'rgba(30, 41, 59, 0.6)',
-          borderRadius: '8px',
-          color: '#94a3b8',
-          padding: '2rem'
-        }}>
-          <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem', color: '#cbd5e1' }}>
-            No price history yet
-          </div>
-          <div style={{ fontSize: '0.85rem', textAlign: 'center' }}>
-            Price data will be collected as you refresh. Check back later for historical data.
-          </div>
-        </div>
-      );
+  // Helper function to get timeframe in milliseconds
+  const getTimeframeMs = (tf: Timeframe): number => {
+    switch (tf) {
+      case '1h': return 60 * 60 * 1000;
+      case '4h': return 4 * 60 * 60 * 1000;
+      case '24h': return 24 * 60 * 60 * 1000;
+      case '7d': return 7 * 24 * 60 * 60 * 1000;
+      default: return 24 * 60 * 60 * 1000;
     }
-    
-    if (data.length === 1) {
-      return (
-        <div style={{ 
-          height: '300px', 
-          display: 'flex', 
-          flexDirection: 'column',
-          alignItems: 'center', 
-          justifyContent: 'center',
-          background: 'rgba(30, 41, 59, 0.6)',
-          borderRadius: '8px',
-          color: '#94a3b8',
-          padding: '2rem'
-        }}>
-          <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem', color: '#cbd5e1' }}>
-            Collecting price data...
-          </div>
-          <div style={{ fontSize: '0.85rem', textAlign: 'center', marginBottom: '1rem' }}>
-            Current price: {data[0].price.toFixed(6)} USDC
-          </div>
-          <div style={{ fontSize: '0.85rem', textAlign: 'center' }}>
-            Refresh the page to collect more data points for the chart.
-          </div>
-        </div>
-      );
-    }
-
-    const width = 800;
-    const height = 300;
-    const padding = 40;
-    const chartWidth = width - 2 * padding;
-    const chartHeight = height - 2 * padding;
-
-    const prices = data.map(d => d.price);
-    const minPrice = Math.min(...prices);
-    const maxPrice = Math.max(...prices);
-    const priceRange = maxPrice - minPrice || 1;
-
-    const points = data.map((point, index) => {
-      const x = padding + (index / (data.length - 1 || 1)) * chartWidth;
-      const y = padding + chartHeight - ((point.price - minPrice) / priceRange) * chartHeight;
-      return `${x},${y}`;
-    }).join(' ');
-
-    const areaPoints = [
-      `${padding},${padding + chartHeight}`,
-      ...data.map((point, index) => {
-        const x = padding + (index / (data.length - 1 || 1)) * chartWidth;
-        const y = padding + chartHeight - ((point.price - minPrice) / priceRange) * chartHeight;
-        return `${x},${y}`;
-      }),
-      `${padding + chartWidth},${padding + chartHeight}`
-    ].join(' ');
-
-    // Format time labels
-    const timeLabels = data.map((point, index) => {
-      if (index % Math.ceil(data.length / 6) === 0 || index === data.length - 1) {
-        const date = new Date(point.timestamp);
-        return { x: padding + (index / (data.length - 1 || 1)) * chartWidth, label: date.toLocaleTimeString() };
-      }
-      return null;
-    }).filter(Boolean) as { x: number; label: string }[];
-
-    return (
-      <svg width={width} height={height} style={{ background: 'rgba(30, 41, 59, 0.6)', borderRadius: '8px' }}>
-        {/* Area under line */}
-        <polygon
-          points={areaPoints}
-          fill="url(#gradient)"
-          opacity={0.3}
-        />
-        <defs>
-          <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#818cf8" stopOpacity={0.4} />
-            <stop offset="100%" stopColor="#818cf8" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-
-        {/* Grid lines */}
-        {[0, 1, 2, 3, 4].map(i => {
-          const y = padding + (i / 4) * chartHeight;
-          return (
-            <line
-              key={i}
-              x1={padding}
-              y1={y}
-              x2={padding + chartWidth}
-              y2={y}
-              stroke="rgba(71, 85, 105, 0.3)"
-              strokeWidth={1}
-            />
-          );
-        })}
-
-        {/* Price line */}
-        <polyline
-          points={points}
-          fill="none"
-          stroke="#818cf8"
-          strokeWidth={2}
-        />
-
-        {/* Data points */}
-        {data.map((point, index) => {
-          const x = padding + (index / (data.length - 1 || 1)) * chartWidth;
-          const y = padding + chartHeight - ((point.price - minPrice) / priceRange) * chartHeight;
-          return (
-            <circle
-              key={index}
-              cx={x}
-              cy={y}
-              r={3}
-              fill="#818cf8"
-              stroke="#fff"
-              strokeWidth={1}
-            />
-          );
-        })}
-
-        {/* Price labels on Y axis */}
-        {[0, 1, 2, 3, 4].map(i => {
-          const price = minPrice + (maxPrice - minPrice) * (1 - i / 4);
-          const y = padding + (i / 4) * chartHeight;
-          return (
-            <text
-              key={i}
-              x={padding - 10}
-              y={y + 4}
-              textAnchor="end"
-              fill="#94a3b8"
-              fontSize="12"
-            >
-              {price.toFixed(6)}
-            </text>
-          );
-        })}
-
-        {/* Time labels on X axis */}
-        {timeLabels.map((label, index) => (
-          <text
-            key={index}
-            x={label.x}
-            y={height - padding + 20}
-            textAnchor="middle"
-            fill="#94a3b8"
-            fontSize="11"
-          >
-            {label.label}
-          </text>
-        ))}
-
-        {/* Y axis label */}
-        <text
-          x={-height / 2}
-          y={15}
-          transform={`rotate(-90, ${padding / 2}, ${height / 2})`}
-          textAnchor="middle"
-          fill="#cbd5e1"
-          fontSize="12"
-          fontWeight="600"
-        >
-          Price (USDC)
-        </text>
-      </svg>
-    );
   };
+
+  // Filter price history by timeframe
+  const getFilteredHistory = useCallback((): PriceDataPoint[] => {
+    const now = Date.now();
+    const timeframeMs = getTimeframeMs(timeframe);
+    const cutoff = now - timeframeMs;
+    return priceHistory.filter(p => p.timestamp > cutoff);
+  }, [priceHistory, timeframe]);
+
+  // Convert price data to candlestick OHLC format
+  const convertToCandlestick = useCallback((data: PriceDataPoint[]): CandlestickData[] => {
+    if (data.length === 0) return [];
+    
+    // Group data by time intervals (e.g., 5 minutes for 1h, 30 min for 24h, etc.)
+    const intervalMs = timeframe === '1h' ? 5 * 60 * 1000 : 
+                       timeframe === '4h' ? 15 * 60 * 1000 :
+                       timeframe === '24h' ? 60 * 60 * 1000 : 
+                       4 * 60 * 60 * 1000; // 7d: 4 hour intervals
+    
+    const grouped: { [key: number]: PriceDataPoint[] } = {};
+    
+    data.forEach(point => {
+      const intervalStart = Math.floor(point.timestamp / intervalMs) * intervalMs;
+      if (!grouped[intervalStart]) {
+        grouped[intervalStart] = [];
+      }
+      grouped[intervalStart].push(point);
+    });
+    
+    // Convert each group to OHLC
+    const candles: CandlestickData[] = [];
+    Object.keys(grouped)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .forEach(intervalStart => {
+        const points = grouped[intervalStart];
+        const prices = points.map(p => p.price);
+        candles.push({
+          time: Math.floor(intervalStart / 1000) as any,
+          open: prices[0],
+          high: Math.max(...prices),
+          low: Math.min(...prices),
+          close: prices[prices.length - 1],
+        });
+      });
+    
+    return candles;
+  }, [timeframe]);
+
+  // Initialize TradingView chart
+  useEffect(() => {
+    if (!chartContainerRef.current || priceHistory.length < 2) return;
+
+    const filteredHistory = getFilteredHistory();
+    if (filteredHistory.length < 2) return;
+
+    // Remove existing series if chart type changed
+    if (chartRef.current && seriesRef.current) {
+      chartRef.current.removeSeries(seriesRef.current);
+      seriesRef.current = null;
+    }
+
+    // Create chart if it doesn't exist
+    if (!chartRef.current) {
+      chartRef.current = createChart(chartContainerRef.current, {
+        layout: {
+          background: { type: ColorType.Solid, color: 'rgba(15, 23, 42, 0.8)' },
+          textColor: '#94a3b8',
+        },
+        grid: {
+          vertLines: { color: 'rgba(71, 85, 105, 0.2)' },
+          horzLines: { color: 'rgba(71, 85, 105, 0.2)' },
+        },
+        width: chartContainerRef.current.clientWidth,
+        height: 400,
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          borderColor: 'rgba(71, 85, 105, 0.5)',
+        },
+        rightPriceScale: {
+          borderColor: 'rgba(71, 85, 105, 0.5)',
+        },
+        crosshair: {
+          mode: 1,
+          vertLine: {
+            color: '#818cf8',
+            width: 1,
+            style: 1,
+          },
+          horzLine: {
+            color: '#818cf8',
+            width: 1,
+            style: 1,
+          },
+        },
+      });
+    }
+
+    const chart = chartRef.current;
+
+    // Add series based on chart type
+    if (chartType === 'candlestick') {
+      const candlestickData = convertToCandlestick(filteredHistory);
+      // Try using CandlestickSeries class if available, otherwise use string
+      const CandlestickSeriesClass = (typeof CandlestickSeries !== 'undefined' ? CandlestickSeries : 'Candlestick');
+      const candlestickSeries = chart.addSeries(CandlestickSeriesClass as any, {
+        upColor: '#10b981',
+        downColor: '#ef4444',
+        borderVisible: true,
+        wickVisible: true,
+        priceFormat: {
+          type: 'price',
+          precision: 6,
+          minMove: 0.000001,
+        },
+      }) as ISeriesApi<'Candlestick'>;
+      
+      candlestickSeries.setData(candlestickData);
+      seriesRef.current = candlestickSeries;
+    } else {
+      const lineData = filteredHistory.map(point => ({
+        time: Math.floor(point.timestamp / 1000) as any,
+        value: point.price,
+      }));
+      
+      const lineSeries = chart.addSeries(LineSeries, {
+        color: '#818cf8',
+        lineWidth: 2,
+        priceLineVisible: true,
+        lastValueVisible: true,
+        priceFormat: {
+          type: 'price',
+          precision: 6,
+          minMove: 0.000001,
+        },
+      }) as ISeriesApi<'Line'>;
+      
+      lineSeries.setData(lineData);
+      seriesRef.current = lineSeries;
+    }
+
+    // Fit content
+    chart.timeScale().fitContent();
+
+
+    // Handle resize
+    const handleResize = () => {
+      if (chartContainerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({
+          width: chartContainerRef.current.clientWidth,
+        });
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+        seriesRef.current = null;
+      }
+    };
+  }, [priceHistory, chartType, timeframe, getFilteredHistory, convertToCandlestick]);
+
 
   const loadPriceHistory = useCallback(async () => {
     if (!wallet) return;
@@ -391,10 +403,70 @@ export default function TokenDetail({
 
       {/* Price Chart */}
       <div style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0', margin: 0 }}>
-            Price History (24h)
+            Price History
           </h2>
+          
+          {/* Chart Type Toggle */}
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button
+              onClick={() => setChartType('line')}
+              style={{
+                padding: '0.5rem 1rem',
+                fontSize: '0.85rem',
+                background: chartType === 'line' ? 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)' : 'rgba(71, 85, 105, 0.6)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                transition: 'all 0.2s'
+              }}
+            >
+              Line
+            </button>
+            <button
+              onClick={() => setChartType('candlestick')}
+              style={{
+                padding: '0.5rem 1rem',
+                fontSize: '0.85rem',
+                background: chartType === 'candlestick' ? 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)' : 'rgba(71, 85, 105, 0.6)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                transition: 'all 0.2s'
+              }}
+            >
+              Candlestick
+            </button>
+          </div>
+
+          {/* Timeframe Selector */}
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {(['1h', '4h', '24h', '7d'] as Timeframe[]).map(tf => (
+              <button
+                key={tf}
+                onClick={() => setTimeframe(tf)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.85rem',
+                  background: timeframe === tf ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'rgba(71, 85, 105, 0.6)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  transition: 'all 0.2s'
+                }}
+              >
+                {tf}
+              </button>
+            ))}
+          </div>
+
           <button
             onClick={loadPriceHistory}
             disabled={loading}
@@ -413,7 +485,58 @@ export default function TokenDetail({
           </button>
         </div>
         <div style={{ overflowX: 'auto' }}>
-          <PriceChart data={priceHistory} />
+          {priceHistory.length === 0 ? (
+            <div style={{ 
+              height: '400px', 
+              display: 'flex', 
+              flexDirection: 'column',
+              alignItems: 'center', 
+              justifyContent: 'center',
+              background: 'rgba(30, 41, 59, 0.6)',
+              borderRadius: '8px',
+              color: '#94a3b8',
+              padding: '2rem'
+            }}>
+              <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem', color: '#cbd5e1' }}>
+                No price history yet
+              </div>
+              <div style={{ fontSize: '0.85rem', textAlign: 'center' }}>
+                Price data will be collected as you refresh. Check back later for historical data.
+              </div>
+            </div>
+          ) : priceHistory.length === 1 ? (
+            <div style={{ 
+              height: '400px', 
+              display: 'flex', 
+              flexDirection: 'column',
+              alignItems: 'center', 
+              justifyContent: 'center',
+              background: 'rgba(30, 41, 59, 0.6)',
+              borderRadius: '8px',
+              color: '#94a3b8',
+              padding: '2rem'
+            }}>
+              <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem', color: '#cbd5e1' }}>
+                Collecting price data...
+              </div>
+              <div style={{ fontSize: '0.85rem', textAlign: 'center', marginBottom: '1rem' }}>
+                Current price: {priceHistory[0].price.toFixed(6)} USDC
+              </div>
+              <div style={{ fontSize: '0.85rem', textAlign: 'center' }}>
+                Refresh the page to collect more data points for the chart.
+              </div>
+            </div>
+          ) : (
+            <div
+              ref={chartContainerRef}
+              style={{
+                width: '100%',
+                height: '400px',
+                background: 'rgba(15, 23, 42, 0.8)',
+                borderRadius: '8px',
+              }}
+            />
+          )}
         </div>
       </div>
 

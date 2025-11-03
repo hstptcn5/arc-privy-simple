@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ethers } from 'ethers';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import DeployToken from './DeployToken';
@@ -428,6 +428,10 @@ function App() {
     }
   }, [wallet, authenticated]);
 
+  // Cache for token prices and pool existence to reduce RPC calls
+  const tokenPriceCache = useRef<Map<string, { price: string | null; poolExists: boolean; timestamp: number }>>(new Map());
+  const CACHE_DURATION = 60000; // 1 minute cache
+
   // Load all tokens from Registry (Marketplace)
   const loadAllTokens = useCallback(async () => {
     if (!wallet || !authenticated) return;
@@ -451,96 +455,76 @@ function App() {
         
         // Check if we got valid data
         if (addresses && infos && Array.isArray(addresses) && Array.isArray(infos) && addresses.length > 0) {
-          // Load prices from AMM if available
-          const tokensWithPrices = await Promise.all(
-            infos.map(async (info: any) => {
-              const tokenAddress = info.tokenAddress;
-              let price: string | null = null;
-              let poolExists = false;
-              
-              // Try to get price from AMM - get AMM address at runtime from localStorage
-              const currentAmmAddress = localStorage.getItem('ammAddress') || AMM_ADDRESS || '0x0249C38Cbbf8623CB4BE09d7ad4002B8517ce5b5';
-              if (currentAmmAddress && ethers.isAddress(currentAmmAddress)) {
-                // First check poolAddress from registry
-                if (info.poolAddress && ethers.isAddress(info.poolAddress) && info.poolAddress !== ethers.ZeroAddress) {
-                  // Registry has pool address, so pool should exist
-                  poolExists = true;
-                  console.log(`Token ${tokenAddress}: pool exists (from registry): ${info.poolAddress}`);
+          // Process tokens sequentially with delays to avoid rate limits
+          const tokensWithPrices = [];
+          const currentAmmAddress = localStorage.getItem('ammAddress') || AMM_ADDRESS || '0x0249C38Cbbf8623CB4BE09d7ad4002B8517ce5b5';
+          const now = Date.now();
+          
+          for (let i = 0; i < infos.length; i++) {
+            const info = infos[i];
+            const tokenAddress = info.tokenAddress;
+            let price: string | null = null;
+            let poolExists = false;
+            
+            // Check cache first
+            const cached = tokenPriceCache.current.get(tokenAddress);
+            if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+              price = cached.price;
+              poolExists = cached.poolExists;
+              console.log(`Token ${tokenAddress}: using cached data`);
+            } else if (currentAmmAddress && ethers.isAddress(currentAmmAddress)) {
+              // If registry has poolAddress, trust it and only fetch price (skip poolExists check)
+              if (info.poolAddress && ethers.isAddress(info.poolAddress) && info.poolAddress !== ethers.ZeroAddress) {
+                poolExists = true;
+                // Only fetch price, don't verify poolExists to save RPC calls
+                try {
+                  const ammContract = new ethers.Contract(currentAmmAddress, AMM_ABI, ethersProvider);
+                  const priceWei = await ammContract.getPrice(tokenAddress);
+                  price = ethers.formatUnits(priceWei, USDC_NATIVE_DECIMALS);
+                  console.log(`Token ${tokenAddress}: price = ${price} USDC`);
+                } catch (err: any) {
+                  console.warn(`Error fetching price for ${tokenAddress}:`, err.message);
+                  // Trust registry, keep poolExists = true even if price fetch fails
+                }
+              } else {
+                // No pool address in registry, check AMM once (no retries to save calls)
+                try {
+                  const ammContract = new ethers.Contract(currentAmmAddress, AMM_ABI, ethersProvider);
+                  poolExists = await ammContract.poolExists(tokenAddress);
                   
-                  // Try to get price with retry logic
-                  let retries = 3;
-                  while (retries > 0) {
-                    try {
-                      const ammContract = new ethers.Contract(currentAmmAddress, AMM_ABI, ethersProvider);
-                      const exists = await ammContract.poolExists(tokenAddress);
-                      poolExists = exists;
-                      
-                      if (exists) {
-                        const priceWei = await ammContract.getPrice(tokenAddress);
-                        price = ethers.formatUnits(priceWei, USDC_NATIVE_DECIMALS);
-                        console.log(`Token ${tokenAddress}: price = ${price} USDC`);
-                        break; // Success, exit retry loop
-                      } else {
-                        console.warn(`Token ${tokenAddress}: registry has pool address but AMM says pool doesn't exist`);
-                      }
-                    } catch (err: any) {
-                      retries--;
-                      if (retries === 0) {
-                        console.error(`Error loading price for ${tokenAddress} after retries:`, err);
-                        // If registry says pool exists, trust it even if we can't verify
-                        if (info.poolAddress && info.poolAddress !== ethers.ZeroAddress) {
-                          poolExists = true;
-                        }
-                      } else {
-                        console.warn(`Retrying poolExists check for ${tokenAddress} (${3 - retries}/3)...`);
-                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
-                      }
-                    }
+                  if (poolExists) {
+                    const priceWei = await ammContract.getPrice(tokenAddress);
+                    price = ethers.formatUnits(priceWei, USDC_NATIVE_DECIMALS);
+                    console.log(`Token ${tokenAddress}: price = ${price} USDC`);
                   }
-                } else {
-                  // No pool address in registry, check AMM directly with retry
-                  let retries = 3;
-                  while (retries > 0) {
-                    try {
-                      const ammContract = new ethers.Contract(currentAmmAddress, AMM_ABI, ethersProvider);
-                      const exists = await ammContract.poolExists(tokenAddress);
-                      poolExists = exists;
-                      console.log(`Token ${tokenAddress}: poolExists = ${exists}, AMM = ${currentAmmAddress}`);
-                      
-                      if (exists) {
-                        const priceWei = await ammContract.getPrice(tokenAddress);
-                        price = ethers.formatUnits(priceWei, USDC_NATIVE_DECIMALS);
-                        console.log(`Token ${tokenAddress}: price = ${price} USDC`);
-                      }
-                      break; // Success, exit retry loop
-                    } catch (err: any) {
-                      retries--;
-                      if (retries === 0) {
-                        console.error(`Error loading price for ${tokenAddress} after retries:`, err);
-                        console.error(`AMM Address used: ${currentAmmAddress}`);
-                      } else {
-                        console.warn(`Retrying poolExists check for ${tokenAddress} (${3 - retries}/3)...`);
-                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
-                      }
-                    }
-                  }
+                } catch (err: any) {
+                  console.warn(`Error checking pool for ${tokenAddress}:`, err.message);
+                  poolExists = false;
                 }
               }
               
-              return {
-                address: tokenAddress,
-                deployer: info.deployer,
-                name: info.name,
-                symbol: info.symbol,
-                decimals: Number(info.decimals),
-                initialSupply: info.initialSupply.toString(),
-                deployTimestamp: Number(info.deployTimestamp),
-                isOwned: deployedTokens.some(t => t.address === tokenAddress),
-                price: price,
-                poolExists: poolExists
-              };
-            })
-          );
+              // Cache the result
+              tokenPriceCache.current.set(tokenAddress, { price, poolExists, timestamp: now });
+            }
+            
+            tokensWithPrices.push({
+              address: tokenAddress,
+              deployer: info.deployer,
+              name: info.name,
+              symbol: info.symbol,
+              decimals: Number(info.decimals),
+              initialSupply: info.initialSupply.toString(),
+              deployTimestamp: Number(info.deployTimestamp),
+              isOwned: deployedTokens.some(t => t.address === tokenAddress),
+              price: price,
+              poolExists: poolExists
+            });
+            
+            // Add delay between requests to avoid rate limiting (except for last token)
+            if (i < infos.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay between tokens
+            }
+          }
           
           setAllTokens(tokensWithPrices);
         } else {
