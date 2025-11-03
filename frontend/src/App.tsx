@@ -6,7 +6,6 @@ import DeployRegistry from './DeployRegistry';
 import DeployAMM from './DeployAMM';
 import { REGISTRY_ADDRESS, REGISTRY_ABI } from './registryConfig';
 import { AMM_ADDRESS, AMM_ABI } from './ammConfig';
-import BuySellToken from './BuySellToken';
 import TokenDetail from './TokenDetail';
 
 const USDC_NATIVE_DECIMALS = 18; // Native USDC uses 18 decimals on Arc

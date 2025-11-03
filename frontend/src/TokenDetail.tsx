@@ -7,6 +7,7 @@ import {
   IChartApi, 
   ISeriesApi, 
   LineSeries,
+  UTCTimestamp,
   // @ts-ignore - CandlestickSeries might not be in types but exists in runtime
   CandlestickSeries 
 } from 'lightweight-charts';
@@ -29,7 +30,7 @@ interface PriceDataPoint {
 }
 
 interface CandlestickData {
-  time: number;
+  time: UTCTimestamp;
   open: number;
   high: number;
   low: number;
@@ -111,7 +112,7 @@ export default function TokenDetail({
         const points = grouped[intervalStart];
         const prices = points.map(p => p.price);
         candles.push({
-          time: Math.floor(intervalStart / 1000) as any,
+          time: Math.floor(intervalStart / 1000) as UTCTimestamp,
           open: prices[0],
           high: Math.max(...prices),
           low: Math.min(...prices),
@@ -195,7 +196,7 @@ export default function TokenDetail({
       seriesRef.current = candlestickSeries;
     } else {
       const lineData = filteredHistory.map(point => ({
-        time: Math.floor(point.timestamp / 1000) as any,
+        time: Math.floor(point.timestamp / 1000) as UTCTimestamp,
         value: point.price,
       }));
       
