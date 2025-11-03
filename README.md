@@ -1,133 +1,21 @@
 # Arc Dex - Token Launchpad & Trading Platform
 
-> A complete Web3 DEX application for deploying, managing, and trading ERC-20 tokens on Arc Testnet with Automated Market Maker (AMM) and on-chain token registry.
+A comprehensive decentralized exchange (DEX) application for deploying, managing, and trading ERC-20 tokens on Arc Testnet with Automated Market Maker (AMM) and on-chain token registry.
 
 **Live Demo**: [https://arc-privy-simple-backend.vercel.app/](https://arc-privy-simple-backend.vercel.app/)
 
-## Project Overview
+## Overview
 
-Arc Dex is a comprehensive decentralized exchange (DEX) that enables users to:
+Arc Dex is a complete Web3 DEX platform that enables users to deploy custom ERC-20 tokens, create liquidity pools, trade tokens through Automated Market Makers, and manage their token portfolio all in one interface. The platform features real-time price charts, an on-chain token registry, and seamless wallet integration for both crypto-native and non-crypto users.
 
-- **Deploy ERC-20 Tokens**: Create and deploy custom tokens on Arc Testnet with just a few clicks
-- **Liquid Pricing with AMM**: Deploy tokens with instant liquidity pools using Automated Market Maker
-- **Token Trading**: Buy and sell tokens directly through AMM pools
-- **Price Charts**: View real-time price history with interactive charts
-- **Token Wallet**: Manage and send/receive tokens (native USDC and ERC-20 tokens)
-- **Token Marketplace**: Discover and browse all tokens deployed on the network
-- **Transaction History**: Track transaction history for the connected wallet
-- **On-chain Registry**: All tokens are stored and managed on-chain through the TokenRegistry contract
+### Key Capabilities
 
-## Applications & Use Cases
-
-This project serves as a complete token management and trading platform with various real-world applications:
-
-### 1. Token Creation Platform
-- **For Developers**: Quickly create and deploy test tokens for dApp development
-- **For Communities**: Launch community tokens or governance tokens
-- **For Businesses**: Create branded tokens or loyalty points tokens
-- **For Education**: Teach token economics and blockchain fundamentals
-
-### 2. Token Wallet & Management
-- **Personal Token Portfolio**: Manage all your deployed tokens in one place
-- **Multi-token Support**: Handle both native USDC and custom ERC-20 tokens
-- **Balance Tracking**: Real-time balance updates across all tokens
-- **Transaction Monitoring**: Complete transaction history for auditing
-
-### 3. Token Marketplace & Trading
-- **Token Browser**: Discover new tokens created by the community
-- **Token Search**: Find tokens by name, symbol, or contract address
-- **Token Analytics**: View deployment details, supply, and ownership
-- **Live Price Display**: Real-time token prices from AMM pools
-- **Token Detail Pages**: Deep dive into token information with price charts
-- **Trading Interface**: Buy and sell tokens directly through AMM
-- **Public Registry**: Transparent on-chain token directory
-
-### 4. On-chain Token Registry
-- **Decentralized Directory**: All tokens registered on-chain (no central server)
-- **Query Interface**: Query tokens by deployer or browse all tokens
-- **Immutable Records**: Token information permanently stored on blockchain
-- **Future Extensions**: Foundation for token swaps, auctions, or trading features
-
-### 5. Web3 Wallet Integration
-- **MetaMask Support**: Full compatibility with MetaMask and other EIP-1193 wallets
-- **Embedded Wallets**: Email-based wallet creation for non-crypto users
-- **Network Management**: Automatic Arc Testnet configuration
-- **Seamless UX**: Easy wallet switching and management
-
-### 4. Automated Market Maker (AMM) & Trading
-- **Liquidity Pools**: Create pools when deploying tokens or add liquidity later
-- **Dynamic Pricing**: Token prices determined by supply and demand (constant product formula)
-- **Buy/Sell Tokens**: Trade tokens directly through AMM pools
-- **Price History**: Track price movements over time with interactive charts
-- **Real-time Quotes**: See exact amounts before executing trades
-- **Pool Management**: View pool reserves and liquidity status
-
-### Potential Extensions
-- **Token Staking**: Implement staking mechanisms for registered tokens
-- **Token Auctions**: Create auction system for token sales
-- **Governance**: Add voting and governance features for token communities
-- **Advanced Charting**: Add technical indicators and more detailed analytics
-- **Multi-chain Support**: Extend to other EVM-compatible chains
-
-## Features
-
-### 1. Token Deployment
-- Deploy ERC-20 tokens with custom name, symbol, decimals, and initial supply
-- Automatic minting of initial supply to deployer
-- Automatic token registration to on-chain TokenRegistry
-- Instant balance display for newly deployed tokens
-
-### 2. Token Wallet
-- View balance of native USDC and all deployed tokens
-- Send tokens (native USDC, deployed tokens, or custom token address)
-- Automatic loading and display of token balances
-- Accurate number formatting for both large and small values
-
-### 3. Transaction History
-- View transaction history from Arcscan API
-- Only fetches transactions for the connected wallet (saves bandwidth)
-- Display sent/received transactions with timestamps and Arcscan links
-- Refresh to update with latest history
-
-### 4. Token Marketplace
-- Browse all tokens deployed on the network
-- Search tokens by name or symbol
-- View detailed information: deployer, initial supply, deploy timestamp
-- Real-time price display for tokens with liquidity pools
-- Highlight tokens that you own
-- Link to Arcscan for contract details
-- **Token Detail Pages**: Click on tokens to view detailed trading interface
-
-### 5. Wallet Integration
-- **MetaMask**: Connect and use MetaMask wallet
-- **Privy Embedded Wallet**: Create embedded wallet for newcomers
-- Automatic network switch to Arc Testnet when connecting MetaMask
-- Prioritizes external wallets (MetaMask) over embedded wallet
-- Displays wallet type currently in use in the UI
-
-### 6. Automated Market Maker (AMM)
-- **SimpleAMM Contract**: Constant product formula (x * y = k) for pricing
-- **Liquidity Pools**: Each token can have a pool paired with USDC
-- **Create Pools**: Add liquidity when deploying or create pools manually
-- **Buy/Sell**: Execute swaps with real-time price quotes
-- **Price Discovery**: Dynamic pricing based on pool reserves
-- **Pool Status**: Track which tokens have active liquidity pools
-
-### 7. Price History & Charts
-- **TradingView Charts**: Interactive charts using Lightweight Charts library (v5)
-- **Chart Types**: Line chart and Candlestick chart (OHLC format)
-- **Timeframe Selection**: View 1h, 4h, 24h, or 7d price history
-- **Real-time Data**: Price data collected from AMM and stored in localStorage
-- **Manual Refresh**: Refresh button to collect latest price data
-- **Visual Analytics**: Professional TradingView-style charts with dark theme, crosshair, grid lines
-- **Data Grouping**: Automatic OHLC conversion for candlestick charts based on timeframe
-
-### 8. On-chain Token Registry
-- TokenRegistry contract manages all tokens on-chain
-- Automatic token registration upon deployment
-- Pool address tracking for tokens with liquidity
-- Fetch tokens from registry (no localStorage needed)
-- Fallback to localStorage if registry not available
+- Deploy ERC-20 tokens with optional liquidity pool creation
+- Trade tokens through AMM with real-time price discovery
+- View interactive price charts with multiple timeframes
+- Manage token portfolio and transaction history
+- Browse decentralized token marketplace
+- Send and receive tokens (native USDC and ERC-20)
 
 ## Architecture
 
@@ -165,175 +53,238 @@ This project serves as a complete token management and trading platform with var
 └─────────────────────────────────────────┘
 ```
 
+## Features
+
+### Token Deployment
+- Deploy ERC-20 tokens with custom name, symbol, decimals, and initial supply
+- Automatic minting of initial supply to deployer address
+- Automatic token registration to on-chain TokenRegistry
+- Optional liquidity pool creation during deployment
+- Instant balance display for newly deployed tokens
+
+### Automated Market Maker (AMM)
+- Constant product formula (x * y = k) for dynamic pricing
+- Liquidity pools pairing tokens with native USDC
+- Create pools during token deployment or add liquidity manually
+- Buy and sell tokens with real-time price quotes
+- Price discovery based on pool reserves
+- Pool status tracking for all tokens
+
+### Trading Interface
+- Dedicated token detail pages with integrated trading
+- Real-time price quotes before execution
+- Buy and sell functionality with slippage protection
+- Pool reserves and liquidity information
+- Balance updates after successful trades
+
+### Price Charts & Analytics
+- TradingView Lightweight Charts integration
+- Line chart and candlestick chart (OHLC) views
+- Multiple timeframe options (1h, 4h, 24h, 7d)
+- Real-time price data collection from AMM
+- Automatic OHLC conversion for candlestick display
+- Professional chart styling with dark theme, crosshair, and grid lines
+
+### Token Marketplace
+- Browse all tokens deployed on the network
+- Search functionality by name or symbol
+- Detailed token information (deployer, supply, timestamp)
+- Real-time price display for tokens with liquidity pools
+- Ownership highlighting for user's tokens
+- Direct links to Arcscan for contract verification
+- Token detail pages with trading interface
+
+### Token Wallet & Management
+- View balances for native USDC and all deployed tokens
+- Send tokens to any address (USDC, deployed tokens, or custom ERC-20)
+- Automatic balance loading and updates
+- Accurate number formatting for various decimal precisions
+- Multi-token portfolio management
+
+### Transaction History
+- View complete transaction history for connected wallet
+- Fetched from Arcscan API
+- Display sent and received transactions with timestamps
+- Direct links to transaction details on Arcscan
+- Manual refresh functionality
+
+### Wallet Integration
+- MetaMask support with automatic Arc Testnet configuration
+- Privy embedded wallets for email-based authentication
+- External wallet prioritization (MetaMask over embedded)
+- Seamless wallet switching
+- Network management and automatic chain switching
+
+### On-chain Token Registry
+- Decentralized token directory stored on blockchain
+- TokenRegistry contract manages all token records
+- Automatic registration upon token deployment
+- Pool address tracking for tokens with liquidity
+- Query tokens by deployer or browse all tokens
+- Immutable on-chain records
+
 ## Smart Contracts
 
 ### TokenRegistry
 **Address**: `0x85667fc0ad255789814B952D73DFe91bd9A58C21`
 
-TokenRegistry is the central contract that manages all tokens deployed on the network:
+Central contract managing all tokens deployed on the network.
 
+**Functions**:
 - `registerToken()`: Register a new token in the registry
 - `getTokensByDeployer()`: Get all tokens by a specific deployer
 - `getAllTokens()`: Get all tokens in the registry
 - `getTotalTokens()`: Get total number of registered tokens
+- `setPoolAddress()`: Associate a liquidity pool address with a token
 
-**Arcscan**: [https://testnet.arcscan.app/address/0x85667fc0ad255789814B952D73DFe91bd9A58C21](https://testnet.arcscan.app/address/0x85667fc0ad255789814B952D73DFe91bd9A58C21)
+**Arcscan**: [View on Arcscan](https://testnet.arcscan.app/address/0x85667fc0ad255789814B952D73DFe91bd9A58C21)
 
 ### SimpleToken (ERC-20)
-Standard ERC-20 token contract with features:
-- Transfer, approve, allowance
-- Mint tokens to deployer on initialization
-- Customizable name, symbol, decimals, initial supply
+Standard ERC-20 token contract with the following features:
+- Standard ERC-20 transfer, approve, and allowance functions
+- Customizable name, symbol, and decimals
+- Initial supply minting to deployer on initialization
+- Full ERC-20 compliance
 
 ### SimpleAMM
 **Address**: `0x0249C38Cbbf8623CB4BE09d7ad4002B8517ce5b5` (default)
 
-Automated Market Maker contract using constant product formula (x * y = k):
+Automated Market Maker contract implementing the constant product formula (x * y = k).
 
+**Functions**:
 - `createPool()`: Create a new liquidity pool for a token
 - `addLiquidity()`: Add liquidity to an existing pool
 - `buyTokens()`: Swap USDC for tokens
 - `sellTokens()`: Swap tokens for USDC
-- `getPrice()`: Get current token price
-- `getReserves()`: Get pool reserves (token and USDC)
-- `getBuyQuote()`: Calculate tokens received for USDC amount
-- `getSellQuote()`: Calculate USDC received for token amount
+- `getPrice()`: Get current token price in USDC
+- `getReserves()`: Get pool reserves (token and USDC amounts)
+- `getBuyQuote()`: Calculate tokens received for a given USDC amount
+- `getSellQuote()`: Calculate USDC received for a given token amount
 - `poolExists()`: Check if a pool exists for a token
 
-**Key Features**:
+**Features**:
 - Each pool pairs a token with native USDC
-- Dynamic pricing based on reserves
+- Dynamic pricing based on reserve ratios
 - Price = USDC Reserve / Token Reserve
-- Slippage protection built-in
-- Events emitted for all operations (PoolCreated, Swap, LiquidityAdded, etc.)
+- Built-in slippage protection through constant product formula
+- Events emitted for all operations (PoolCreated, Swap, LiquidityAdded)
 
-**Arcscan**: [https://testnet.arcscan.app/address/0x0249C38Cbbf8623CB4BE09d7ad4002B8517ce5b5](https://testnet.arcscan.app/address/0x0249C38Cbbf8623CB4BE09d7ad4002B8517ce5b5)
+**Arcscan**: [View on Arcscan](https://testnet.arcscan.app/address/0x0249C38Cbbf8623CB4BE09d7ad4002B8517ce5b5)
 
 ## Installation & Setup
 
-### Requirements
+### Prerequisites
 - Node.js >= 18
-- npm or yarn
-- MetaMask (optional, for external wallet)
+- npm or yarn package manager
+- MetaMask browser extension (optional, for external wallet)
 
-### 1. Clone Repository
+### Installation Steps
 
+1. **Clone Repository**
 ```bash
 git clone <repository-url>
 cd arc-dex
 ```
 
-### 2. Setup Frontend
-
+2. **Install Dependencies**
 ```bash
 cd frontend
 npm install
 ```
 
-### 3. Run Development Server
-
-From the root directory:
-
+3. **Start Development Server**
 ```bash
 npm run dev
 ```
 
-This will start the frontend development server on **http://localhost:5173**.
+The application will be available at **http://localhost:5173**.
 
-**Note**: The frontend connects directly to the Arc blockchain via Privy and doesn't require a separate backend server. If you need backend API features, you can run both:
+**Note**: The frontend connects directly to the Arc blockchain via Privy and doesn't require a separate backend server.
 
-```bash
-npm run dev:both
-```
+4. **Deploy Smart Contracts** (if not already deployed)
 
-This runs both frontend (port 5173) and backend (port 3001) simultaneously.
+The TokenRegistry and SimpleAMM contracts may already be deployed. If you need to deploy new instances:
 
-### 4. Deploy TokenRegistry (If not already deployed)
+- Go to the "Deploy" tab in the application
+- Use "Deploy TokenRegistry" and "Deploy SimpleAMM" components
+- Copy deployed addresses and update configuration files:
+  - `frontend/src/registryConfig.ts` for TokenRegistry
+  - `frontend/src/ammConfig.ts` for SimpleAMM
 
-1. Open the application at http://localhost:5173 and login with Privy
-2. Go to "Deploy" tab
-3. Click "Deploy TokenRegistry"
-4. Copy the deployed address and update `frontend/src/registryConfig.ts`
+5. **Configure Application**
 
-Or use the `frontend/src/DeployRegistry.tsx` component.
-
-### 5. Start Using
-
-1. Open http://localhost:5173
-2. Login with Privy (email or MetaMask)
-3. If using MetaMask, the app will automatically switch to Arc Testnet
-4. Deploy tokens, send/receive, and explore the marketplace!
+See the Configuration section below for details on setting up Privy App ID and contract addresses.
 
 ## Usage Guide
 
 ### Deploy Token
 
-1. Go to **"Deploy"** tab
+1. Navigate to the "Deploy" tab
 2. Fill in token information:
    - **Name**: Token name (e.g., "My Token")
    - **Symbol**: Token symbol (e.g., "MTK")
-   - **Decimals**: Number of decimal places (usually 18)
-   - **Initial Supply**: Initial token amount
+   - **Decimals**: Number of decimal places (typically 18)
+   - **Initial Supply**: Initial token amount to mint
 3. **Optional - Create Liquidity Pool**:
-   - Check "Create Liquidity Pool" checkbox
-   - Enter initial token amount to add to pool (default: 50% of supply)
+   - Enable "Create Liquidity Pool" checkbox
+   - Enter initial token amount for the pool (default: 50% of supply)
    - Enter initial USDC amount (default: 100 USDC)
-4. Click **"Deploy Token"**
-5. Confirm transaction(s) in MetaMask or Privy
-6. Token will be deployed, minted to your wallet, and pool created (if enabled)!
+4. Click "Deploy Token"
+5. Confirm transaction(s) in your wallet
+6. Token will be deployed, minted to your wallet, and pool created (if enabled)
 
-**Note**: If you deploy without a pool, you can create one later from the Marketplace.
+**Note**: Tokens can be deployed without a pool and pools can be created later from the Marketplace.
 
 ### Send Tokens
 
-1. Go to **"Send"** tab
+1. Navigate to the "Send" tab
 2. Select token type:
    - **USDC**: Native USDC on Arc
    - **Deployed Tokens**: Tokens you've deployed
-   - **Custom**: Enter contract address
+   - **Custom**: Enter custom ERC-20 contract address
 3. Enter recipient address and amount
-4. Click **"Send"** and confirm transaction
+4. Click "Send" and confirm transaction in your wallet
 
 ### View Transaction History
 
-1. Go to **"History"** tab
+1. Navigate to the "History" tab
 2. View all transactions for the connected wallet
-3. Click on transaction hash to view on Arcscan
-4. Click **"Refresh"** to update
+3. Click on transaction hash to view details on Arcscan
+4. Click "Refresh" to update the transaction list
 
 ### Explore Marketplace
 
-1. Go to **"Marketplace"** tab
-2. View all tokens deployed on the network
-3. Use search bar to find tokens
+1. Navigate to the "Marketplace" tab
+2. Browse all tokens deployed on the network
+3. Use the search bar to find specific tokens
 4. Your owned tokens will be highlighted
 5. View real-time prices for tokens with liquidity pools
-6. **For tokens with pools**: Click **"View Details & Trade →"** to open token detail page
-7. **For tokens without pools**: Click **"Create Pool"** to add liquidity manually
-8. Click on token card to view on Arcscan
+6. Click "View Details & Trade" to open the token detail page
+7. For tokens without pools, click "Create Pool" to add liquidity manually
+8. Click on token cards to view contracts on Arcscan
 
-### Trade Tokens (Buy/Sell)
+### Trade Tokens
 
-1. In Marketplace, click **"View Details & Trade →"** on any token with a pool
+1. From the Marketplace, click "View Details & Trade" on any token with a pool
 2. On the token detail page:
-   - View price chart showing 24h price history
+   - View price chart with historical price data
    - See current price, your balances, and pool reserves
-   - Click **"Buy CHARL"** or **"Sell CHARL"** tab
-3. Enter amount to buy/sell
-4. View quote showing exact amount you'll receive
-5. Click **"Buy"** or **"Sell"** and confirm transaction
-6. Transaction will execute and balances will update
+   - Switch between "Buy" and "Sell" tabs
+3. Enter amount to buy or sell
+4. Review the quote showing the exact amount you'll receive
+5. Click "Buy" or "Sell" and confirm transaction
+6. Transaction will execute and balances will update automatically
 
 ### Create Liquidity Pool (Manual)
 
-1. Go to **"Marketplace"** tab
-2. Find a token without a liquidity pool (marked with ⚠️)
-3. Click **"Create Pool"** button
+1. Navigate to the "Marketplace" tab
+2. Find a token without a liquidity pool (indicated by pool status)
+3. Click "Create Pool" button
 4. Enter:
-   - **Token Amount**: Amount of tokens to add
-   - **USDC Amount**: Amount of USDC to pair with
-5. Click **"Create Pool"** and confirm transaction
-6. Pool will be created and token will become tradeable!
+   - **Token Amount**: Amount of tokens to add to the pool
+   - **USDC Amount**: Amount of USDC to pair with tokens
+5. Click "Create Pool" and confirm transaction
+6. Pool will be created and the token will become tradeable
 
 ## Configuration
 
@@ -360,7 +311,7 @@ To change, edit `frontend/src/registryConfig.ts`:
 export const REGISTRY_ADDRESS = '0xYourRegistryAddress';
 ```
 
-Or it will automatically load from `localStorage.getItem('registryAddress')` when deployed.
+The application will also automatically load the address from `localStorage.getItem('registryAddress')` if available.
 
 ### AMM Contract Address
 
@@ -372,12 +323,12 @@ To change, edit `frontend/src/ammConfig.ts`:
 export const DEFAULT_AMM_ADDRESS = '0xYourAMMAddress';
 ```
 
-Or it will automatically load from `localStorage.getItem('ammAddress')` when deployed via the UI.
+The application will also automatically load the address from `localStorage.getItem('ammAddress')` if deployed via the UI.
 
 To deploy a new AMM contract:
-1. Go to **"Deploy"** tab
-2. Click **"Deploy SimpleAMM"**
-3. Address will be automatically saved to localStorage
+1. Go to the "Deploy" tab
+2. Click "Deploy SimpleAMM"
+3. The address will be automatically saved to localStorage
 
 ## Network Information
 
@@ -392,22 +343,23 @@ To deploy a new AMM contract:
 ## Tech Stack
 
 ### Frontend
-- **React** 18.2
-- **TypeScript** 5.2
-- **Vite** 5.0
+- **React** 18.2 - UI framework
+- **TypeScript** 5.2 - Type safety
+- **Vite** 5.0 - Build tool and dev server
 - **Ethers.js** 6.15 - Blockchain interaction
-- **Privy** 3.5 - Wallet & Authentication
-- **Viem** 2.38 - Chain configuration
+- **Privy** 3.5 - Wallet infrastructure and authentication
+- **Lightweight Charts** 5.0 - TradingView chart library
+- **Viem** 2.38 - Chain configuration utilities
 
 ### Smart Contracts
-- **Solidity** 0.8.30
-- **Hardhat** / **solc** - Compilation
-- **ERC-20** Standard tokens
+- **Solidity** 0.8.30 - Smart contract language
+- **Hardhat** / **solc** - Compilation tools
+- **ERC-20** Standard - Token standard implementation
 
 ## Project Structure
 
 ```
-arc-payusdc/
+arc-dex/
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx              # Main application component
@@ -420,7 +372,8 @@ arc-payusdc/
 │   │   ├── ammConfig.ts         # AMM address & ABI
 │   │   └── main.tsx             # Privy setup & entry point
 │   ├── package.json
-│   └── vite.config.ts
+│   ├── vite.config.ts
+│   └── index.html
 ├── contracts/
 │   ├── src/
 │   │   ├── SimpleToken.sol      # ERC-20 token contract
@@ -435,72 +388,39 @@ arc-payusdc/
 
 ## Security
 
-- **Private Keys**: Never stored or sent to server
-- **MetaMask**: All transactions are signed in MetaMask
-- **Privy Embedded Wallet**: Uses MPC (Multi-Party Computation) for security
+- **Private Keys**: Never stored or transmitted to any server
+- **MetaMask**: All transactions are signed locally in MetaMask
+- **Privy Embedded Wallet**: Uses MPC (Multi-Party Computation) for enhanced security
 - **On-chain Registry**: All token data stored on-chain, no backend dependency
+- **Smart Contract Audits**: Users should audit contracts before deploying to mainnet
 
-## Deploy to Vercel
+## Deployment
+
+### Deploy to Vercel
 
 **Live Application**: [https://arc-privy-simple-backend.vercel.app/](https://arc-privy-simple-backend.vercel.app/)
 
-### Step-by-Step Guide
+#### Deployment Steps
 
 1. Go to [Vercel Dashboard](https://vercel.com)
-2. Click **"Add New Project"** or **"Import Project"**
+2. Click "Add New Project" or "Import Project"
 3. Import your Git repository (GitHub, GitLab, or Bitbucket)
-4. **CRITICAL - Configure Build Settings**:
-   
-   In the **"Configure Project"** page:
-   
-   - **Root Directory**: Click **"Override"** → Type: `frontend` → Save
-   - **Framework Preset**: Click **"Override"** → Select **"Other"** (DO NOT select "Vite")
-   - **Build Command**: Click **"Override"** → Type: `npm run build`
-   - **Output Directory**: Click **"Override"** → Type: `dist`
-   - **Install Command**: Click **"Override"** → Type: `npm install`
-   
-5. Click **"Deploy"**
+4. Configure build settings:
 
-### Important Notes
+   - **Root Directory**: Override → Type: `frontend` → Save
+   - **Framework Preset**: Override → Select "Other" (do not select "Vite")
+   - **Build Command**: Override → Type: `npm run build`
+   - **Output Directory**: Override → Type: `dist`
+   - **Install Command**: Override → Type: `npm install`
 
-- **Root Directory MUST be `frontend`** - This is critical!
-- **Framework Preset MUST be "Other"** - Not "Vite" or any other framework
-- Vercel will automatically detect the static files after build
+5. Click "Deploy"
 
-### Troubleshooting
+#### Important Configuration Notes
 
-If you get errors:
+- Root Directory must be set to `frontend` (not the repository root)
+- Framework Preset must be "Other" (not "Vite" or any other framework preset)
+- Vercel will automatically detect static files after build completion
 
-- **"No entrypoint found"**: Framework Preset must be "Other", not "Vite". Also ensure Root Directory is `frontend`
-- **"Cannot read properties"**: Make sure Root Directory is set to `frontend` (not root)
-- **"Command exited with 1"**: Check that `frontend/package.json` exists and dependencies are correct
-- **"Cannot find module"**: Ensure all dependencies are in `frontend/package.json`
+## Built on Arc Network
 
-**Most common fix**: Delete the project on Vercel, create a new one, and set Framework Preset to "Other" (not Vite)!
-
-## Contributing
-
-PRs welcome! Please:
-1. Fork the project
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## Credits
-
-- **Arc Network**: Stablecoin-native Layer-1 blockchain by Circle
-- **Privy**: Wallet infrastructure and authentication
-- **Ethers.js**: Ethereum JavaScript library
-- **React**: UI framework
-
-## Documentation
-
-- [Arc Network Docs](https://docs.arc.network)
-- [Arc Explorer](https://testnet.arcscan.app)
-- [Privy Docs](https://docs.privy.io)
-- [Ethers.js Docs](https://docs.ethers.org)
-
----
-
-**Built on Arc Network**
+Arc Network is a stablecoin-native Layer-1 blockchain by Circle, optimized for USDC transactions and Web3 applications.
