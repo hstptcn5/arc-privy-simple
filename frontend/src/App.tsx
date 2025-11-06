@@ -175,6 +175,7 @@ function App() {
     clientEmail: ''
   });
   const [invoiceTokenInfo, setInvoiceTokenInfo] = useState<{name: string, symbol: string, decimals: number} | null>(null);
+  const [invoiceCustomTokenAddress, setInvoiceCustomTokenAddress] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>(() => {
     const saved = localStorage.getItem('invoiceTemplates');
@@ -706,6 +707,14 @@ function App() {
         
         setResult({ txHash: receipt!.hash });
         
+        // Check if this was an invoice payment and update status immediately
+        if (selectedInvoice && sendToAddress.toLowerCase() === selectedInvoice.recipientAddress.toLowerCase()) {
+          // Wait a bit for transaction to be indexed, then check
+          setTimeout(() => {
+            checkInvoicePayment(selectedInvoice);
+          }, 2000);
+        }
+        
         // Reset after a moment
         setTimeout(() => {
           setTxStatus('idle');
@@ -779,6 +788,14 @@ function App() {
         console.log(`Transaction confirmed!`);
 
         setResult({ txHash: receipt!.hash });
+        
+        // Check if this was an invoice payment and update status immediately
+        if (selectedInvoice && sendToAddress.toLowerCase() === selectedInvoice.recipientAddress.toLowerCase()) {
+          // Wait a bit for transaction to be indexed, then check
+          setTimeout(() => {
+            checkInvoicePayment(selectedInvoice);
+          }, 2000);
+        }
         
         // Reset after a moment
         setTimeout(() => {
@@ -1021,19 +1038,33 @@ function App() {
       return;
     }
 
-    // Determine token info
+    // Determine token info and actual token address
     let tokenSymbol = 'USDC';
+    let actualTokenAddress: string = 'usdc';
+    
     if (newInvoice.token !== 'usdc') {
-      if (newInvoice.token === 'custom' && !invoiceTokenInfo) {
-        alert('Please load custom token info first');
-        return;
+      if (newInvoice.token === 'custom') {
+        // For custom token, use the address from input field
+        if (!invoiceCustomTokenAddress || !ethers.isAddress(invoiceCustomTokenAddress)) {
+          alert('Please enter a valid custom token address');
+          return;
+        }
+        if (!invoiceTokenInfo) {
+          alert('Please load custom token info first');
+          return;
+        }
+        actualTokenAddress = invoiceCustomTokenAddress;
+        tokenSymbol = invoiceTokenInfo.symbol;
+      } else {
+        // For deployed token, use the address from dropdown
+        const token = deployedTokens.find(t => t.address === newInvoice.token);
+        if (!token) {
+          alert('Token not found');
+          return;
+        }
+        actualTokenAddress = newInvoice.token;
+        tokenSymbol = token.symbol;
       }
-      const token = deployedTokens.find(t => t.address === newInvoice.token);
-      if (!token && !invoiceTokenInfo) {
-        alert('Token not found');
-        return;
-      }
-      tokenSymbol = token?.symbol || invoiceTokenInfo?.symbol || 'TOKEN';
     }
 
     // Generate unique invoice ID and professional invoice number
@@ -1054,7 +1085,7 @@ function App() {
       title: newInvoice.title,
       description: newInvoice.description || '',
       amount: newInvoice.amount,
-      token: newInvoice.token,
+      token: actualTokenAddress, // Use actual token address instead of 'custom' or dropdown value
       tokenSymbol,
       recipientAddress: activeAddress,
       createdAt: Date.now(),
@@ -1084,10 +1115,11 @@ function App() {
       clientEmail: ''
     });
     setInvoiceTokenInfo(null);
+    setInvoiceCustomTokenAddress('');
     
     // Select the new invoice to show shareable link
     setSelectedInvoice(invoice);
-  }, [activeAddress, newInvoice, invoiceTokenInfo, deployedTokens, invoices, getNextInvoiceNumber, calculateInvoiceTotal]);
+  }, [activeAddress, newInvoice, invoiceTokenInfo, invoiceCustomTokenAddress, deployedTokens, invoices, getNextInvoiceNumber, calculateInvoiceTotal]);
 
   // Save invoice as template
   const saveAsTemplate = useCallback(() => {
@@ -1218,14 +1250,75 @@ function App() {
               localStorage.setItem('invoices', JSON.stringify(updated));
               return;
             }
+          } else {
+            // For ERC20 tokens - check token transfers
+            // First, get token transfers for this address
+            try {
+              const tokenTransferResponse = await fetch(
+                `https://testnet.arcscan.app/api?module=account&action=tokentx&address=${invoice.recipientAddress}&startblock=0&endblock=99999999&sort=desc&page=1&offset=10`
+              );
+              const tokenData = await tokenTransferResponse.json();
+              
+              if (tokenData.status === '1' && tokenData.result && Array.isArray(tokenData.result)) {
+                for (const tokenTx of tokenData.result) {
+                  // Check if transaction is after invoice creation
+                  if (parseInt(tokenTx.timeStamp) * 1000 < invoice.createdAt) continue;
+                  
+                  // Check if token address matches
+                  if (tokenTx.contractAddress?.toLowerCase() !== invoice.token.toLowerCase()) continue;
+                  
+                  // Check if recipient matches
+                  if (tokenTx.to?.toLowerCase() !== invoice.recipientAddress.toLowerCase()) continue;
+                  
+                  // Get token decimals - try to get from deployedTokens first, then from contract
+                  let decimals = 18;
+                  const deployedToken = deployedTokens.find(t => t.address.toLowerCase() === invoice.token.toLowerCase());
+                  if (deployedToken) {
+                    decimals = deployedToken.decimals;
+                  } else {
+                    // Try to fetch from contract if not in deployedTokens
+                    try {
+                      const { provider } = await getProviderAndSigner();
+                      const TokenABI = [
+                        { inputs: [], name: 'decimals', outputs: [{ type: 'uint8' }], stateMutability: 'view', type: 'function' }
+                      ];
+                      const tokenContract = new ethers.Contract(invoice.token, TokenABI, provider);
+                      decimals = Number(await tokenContract.decimals());
+                    } catch (e) {
+                      console.warn('Could not fetch token decimals, using 18');
+                    }
+                  }
+                  
+                  // Parse amounts
+                  const invoiceAmountWei = ethers.parseUnits(invoice.amount, decimals);
+                  const txAmountWei = BigInt(tokenTx.value || '0');
+                  
+                  // Allow small tolerance (0.1% difference)
+                  const tolerance = invoiceAmountWei * BigInt(999) / BigInt(1000);
+                  
+                  if (txAmountWei >= tolerance) {
+                    // Payment found!
+                    const updated = invoices.map(inv => 
+                      inv.id === invoice.id 
+                        ? { ...inv, status: 'paid' as const, paidTxHash: tokenTx.hash, paidAt: parseInt(tokenTx.timeStamp) * 1000 }
+                        : inv
+                    );
+                    setInvoices(updated);
+                    localStorage.setItem('invoices', JSON.stringify(updated));
+                    return;
+                  }
+                }
+              }
+            } catch (tokenErr: any) {
+              console.error('Error checking ERC20 token payment:', tokenErr);
+            }
           }
-          // TODO: Add ERC20 token payment checking if needed
         }
       }
     } catch (err: any) {
       console.error('Error checking invoice payment:', err);
     }
-  }, [invoices]);
+  }, [invoices, deployedTokens, getProviderAndSigner]);
 
   // Monitor all pending invoices periodically
   useEffect(() => {
@@ -4200,6 +4293,7 @@ function App() {
                         onChange={(e) => {
                           setNewInvoice({ ...newInvoice, token: e.target.value });
                           setInvoiceTokenInfo(null);
+                          setInvoiceCustomTokenAddress('');
                         }}
                         style={{
                           width: '100%',
@@ -4231,7 +4325,9 @@ function App() {
                       <input
                         type="text"
                         placeholder="0x..."
+                        value={invoiceCustomTokenAddress}
                         onChange={async (e) => {
+                          setInvoiceCustomTokenAddress(e.target.value);
                           if (e.target.value && ethers.isAddress(e.target.value)) {
                             try {
                               const { provider } = await getProviderAndSigner();
@@ -4251,6 +4347,8 @@ function App() {
                               console.error('Error loading token info:', err);
                               setInvoiceTokenInfo(null);
                             }
+                          } else {
+                            setInvoiceTokenInfo(null);
                           }
                         }}
                         style={{
