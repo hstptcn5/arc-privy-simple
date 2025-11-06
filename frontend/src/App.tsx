@@ -4712,35 +4712,56 @@ function App() {
                         // Pre-fill send form with invoice data
                         setSendToAddress(selectedInvoice.recipientAddress);
                         setAmount(selectedInvoice.amount);
-                        setSelectedToken(selectedInvoice.token);
                         
-                        // Wait a bit for state to update, then trigger send
-                        setTimeout(async () => {
-                          // Check if we need custom token info for ERC20
-                          if (selectedInvoice.token === 'custom') {
-                            alert('Custom token payment from invoice requires token address. Please use Send tab.');
-                            setActiveTab('send');
+                        // Handle token selection based on invoice token
+                        if (selectedInvoice.token === 'usdc') {
+                          // USDC native payment
+                          setSelectedToken('usdc');
+                        } else {
+                          // Custom token or deployed token - treat as custom token
+                          const tokenAddress = selectedInvoice.token;
+                          setSelectedToken('custom');
+                          setCustomTokenAddress(tokenAddress);
+                          
+                          // Load token info - always load to ensure it's fresh
+                          try {
+                            await loadCustomTokenInfo(tokenAddress);
+                            // Wait a bit for state to update
+                            await new Promise(resolve => setTimeout(resolve, 300));
+                          } catch (err: any) {
+                            console.error('Error loading token info:', err);
+                            alert(`Failed to load token info: ${err.message}`);
                             return;
                           }
-                          
-                          // For deployed tokens, ensure token info is available
+                        }
+                        
+                        // Navigate to send tab first
+                        setActiveTab('send');
+                        
+                        // Wait a bit for tab switch and state to fully update, then trigger send
+                        setTimeout(async () => {
+                          // For custom tokens, verify token info is loaded before sending
                           if (selectedInvoice.token !== 'usdc') {
-                            const token = deployedTokens.find(t => t.address === selectedInvoice.token);
-                            if (!token) {
-                              alert('Token not found. Please use Send tab.');
-                              setActiveTab('send');
-                              return;
+                            // Get current state values
+                            const currentTokenAddress = selectedInvoice.token;
+                            
+                            // If token info is not loaded or address doesn't match, load it
+                            if (!customTokenInfo || customTokenAddress !== currentTokenAddress) {
+                              try {
+                                await loadCustomTokenInfo(currentTokenAddress);
+                                // Wait for state update
+                                await new Promise(resolve => setTimeout(resolve, 300));
+                              } catch (err: any) {
+                                console.error('Error loading token info:', err);
+                                alert(`Failed to load token info: ${err.message}`);
+                                return;
+                              }
                             }
                           }
                           
-                          // Navigate to send tab first
-                          setActiveTab('send');
-                          
-                          // Wait a bit more for tab switch, then trigger send
-                          setTimeout(async () => {
-                            await sendToken();
-                          }, 300);
-                        }, 100);
+                          // Now send the transaction
+                          await sendToken();
+                        }, 500);
                       }}
                       style={{
                         width: '100%',
