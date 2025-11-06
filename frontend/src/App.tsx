@@ -125,6 +125,7 @@ function App() {
   // Invoice/Payment Request states
   interface Invoice {
     id: string;
+    invoiceNumber: string; // Professional invoice number (INV-001, INV-002, etc.)
     title: string;
     description: string;
     amount: string;
@@ -136,6 +137,22 @@ function App() {
     status: 'pending' | 'paid' | 'expired';
     paidTxHash?: string;
     paidAt?: number;
+    discount?: string; // optional discount amount
+    tax?: string; // optional tax amount
+    totalAmount?: string; // amount + tax - discount
+    clientName?: string; // optional client/customer name
+    clientEmail?: string; // optional client email
+  }
+  
+  interface InvoiceTemplate {
+    id: string;
+    name: string;
+    title: string;
+    description: string;
+    token: 'usdc' | string;
+    discount?: string;
+    tax?: string;
+    clientName?: string;
   }
   
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
@@ -147,10 +164,20 @@ function App() {
     description: '',
     amount: '',
     token: 'usdc' as 'usdc' | string,
-    expiresInDays: ''
+    expiresInDays: '',
+    discount: '',
+    tax: '',
+    clientName: '',
+    clientEmail: ''
   });
   const [invoiceTokenInfo, setInvoiceTokenInfo] = useState<{name: string, symbol: string, decimals: number} | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>(() => {
+    const saved = localStorage.getItem('invoiceTemplates');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [invoiceFilter, setInvoiceFilter] = useState<'all' | 'pending' | 'paid' | 'expired'>('all');
 
   // Get wallet - prioritize external wallets (MetaMask, etc.) over embedded wallet
   // External wallets have walletClientType like 'metamask', 'walletconnect', etc.
@@ -945,6 +972,33 @@ function App() {
     }
   };
 
+  // Generate next invoice number
+  const getNextInvoiceNumber = useCallback(() => {
+    const lastInvoice = invoices.sort((a, b) => {
+      const numA = parseInt(a.invoiceNumber?.replace('INV-', '') || '0');
+      const numB = parseInt(b.invoiceNumber?.replace('INV-', '') || '0');
+      return numB - numA;
+    })[0];
+    
+    if (lastInvoice && lastInvoice.invoiceNumber) {
+      const lastNum = parseInt(lastInvoice.invoiceNumber.replace('INV-', '') || '0');
+      return `INV-${String(lastNum + 1).padStart(4, '0')}`;
+    }
+    return 'INV-0001';
+  }, [invoices]);
+
+  // Calculate total amount with discount and tax
+  const calculateInvoiceTotal = useCallback((amount: string, discount?: string, tax?: string) => {
+    let total = parseFloat(amount) || 0;
+    if (discount) {
+      total -= parseFloat(discount) || 0;
+    }
+    if (tax) {
+      total += parseFloat(tax) || 0;
+    }
+    return Math.max(0, total).toFixed(6);
+  }, []);
+
   // Create new invoice/payment request
   const createInvoice = useCallback(async () => {
     if (!activeAddress) {
@@ -978,16 +1032,21 @@ function App() {
       tokenSymbol = token?.symbol || invoiceTokenInfo?.symbol || 'TOKEN';
     }
 
-    // Generate unique invoice ID
+    // Generate unique invoice ID and professional invoice number
     const invoiceId = `inv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const invoiceNumber = getNextInvoiceNumber();
     
     // Calculate expiry
     const expiresAt = newInvoice.expiresInDays 
       ? Date.now() + (parseInt(newInvoice.expiresInDays) * 24 * 60 * 60 * 1000)
       : undefined;
 
+    // Calculate total with discount and tax
+    const totalAmount = calculateInvoiceTotal(newInvoice.amount, newInvoice.discount, newInvoice.tax);
+
     const invoice: Invoice = {
       id: invoiceId,
+      invoiceNumber,
       title: newInvoice.title,
       description: newInvoice.description || '',
       amount: newInvoice.amount,
@@ -996,7 +1055,12 @@ function App() {
       recipientAddress: activeAddress,
       createdAt: Date.now(),
       expiresAt,
-      status: 'pending'
+      status: 'pending',
+      discount: newInvoice.discount || undefined,
+      tax: newInvoice.tax || undefined,
+      totalAmount: totalAmount !== newInvoice.amount ? totalAmount : undefined,
+      clientName: newInvoice.clientName || undefined,
+      clientEmail: newInvoice.clientEmail || undefined
     };
 
     const updatedInvoices = [invoice, ...invoices];
@@ -1009,13 +1073,102 @@ function App() {
       description: '',
       amount: '',
       token: 'usdc',
-      expiresInDays: ''
+      expiresInDays: '',
+      discount: '',
+      tax: '',
+      clientName: '',
+      clientEmail: ''
     });
     setInvoiceTokenInfo(null);
     
     // Select the new invoice to show shareable link
     setSelectedInvoice(invoice);
-  }, [activeAddress, newInvoice, invoiceTokenInfo, deployedTokens, invoices]);
+  }, [activeAddress, newInvoice, invoiceTokenInfo, deployedTokens, invoices, getNextInvoiceNumber, calculateInvoiceTotal]);
+
+  // Save invoice as template
+  const saveAsTemplate = useCallback(() => {
+    if (!newInvoice.title) {
+      alert('Please fill in at least title');
+      return;
+    }
+
+    const template: InvoiceTemplate = {
+      id: `tpl_${Date.now()}`,
+      name: newInvoice.title,
+      title: newInvoice.title,
+      description: newInvoice.description,
+      token: newInvoice.token,
+      discount: newInvoice.discount || undefined,
+      tax: newInvoice.tax || undefined,
+      clientName: newInvoice.clientName || undefined
+    };
+
+    const updated = [...invoiceTemplates, template];
+    setInvoiceTemplates(updated);
+    localStorage.setItem('invoiceTemplates', JSON.stringify(updated));
+    alert('Template saved!');
+  }, [newInvoice, invoiceTemplates]);
+
+  // Load template into form
+  const loadTemplate = useCallback((template: InvoiceTemplate) => {
+    setNewInvoice({
+      title: template.title,
+      description: template.description || '',
+      amount: '',
+      token: template.token,
+      expiresInDays: '',
+      discount: template.discount || '',
+      tax: template.tax || '',
+      clientName: template.clientName || '',
+      clientEmail: ''
+    });
+    setShowTemplateModal(false);
+  }, []);
+
+  // Export invoices to CSV
+  const exportInvoicesToCSV = useCallback(() => {
+    const headers = ['Invoice Number', 'Title', 'Amount', 'Token', 'Status', 'Created', 'Paid', 'Client Name', 'Client Email'];
+    const rows = invoices.map(inv => [
+      inv.invoiceNumber || inv.id,
+      inv.title,
+      inv.amount,
+      inv.tokenSymbol,
+      inv.status,
+      new Date(inv.createdAt).toLocaleString(),
+      inv.paidAt ? new Date(inv.paidAt).toLocaleString() : '',
+      inv.clientName || '',
+      inv.clientEmail || ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `invoices_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [invoices]);
+
+  // Calculate invoice statistics
+  const invoiceStats = useMemo(() => {
+    const total = invoices.length;
+    const pending = invoices.filter(inv => inv.status === 'pending').length;
+    const paid = invoices.filter(inv => inv.status === 'paid').length;
+    const expired = invoices.filter(inv => inv.status === 'expired').length;
+    
+    const totalAmount = invoices
+      .filter(inv => inv.status === 'paid')
+      .reduce((sum, inv) => sum + parseFloat(inv.amount || '0'), 0);
+    
+    return { total, pending, paid, expired, totalAmount };
+  }, [invoices]);
 
   // Check invoice payment status by monitoring on-chain transactions
   const checkInvoicePayment = useCallback(async (invoice: Invoice) => {
@@ -3813,20 +3966,107 @@ function App() {
 
         {activeTab === 'invoices' && (
           <div style={{ padding: '2rem', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '1rem' }}>
-              Payment Requests / Invoices
-            </h2>
-            <p style={{ fontSize: '0.9rem', color: '#94a3b8', marginBottom: '2rem' }}>
-              Create shareable payment requests. Perfect for remittances, marketplaces, and trade finance.
-            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.5rem' }}>
+                  Payment Requests / Invoices
+                </h2>
+                <p style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
+                  Create shareable payment requests. Perfect for remittances, marketplaces, and trade finance.
+                </p>
+              </div>
+              {invoices.length > 0 && (
+                <button
+                  onClick={exportInvoicesToCSV}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    fontSize: '0.9rem',
+                    background: 'rgba(34, 197, 94, 0.2)',
+                    color: '#86efac',
+                    border: '1px solid rgba(34, 197, 94, 0.3)',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  Export CSV
+                </button>
+              )}
+            </div>
+
+            {/* Invoice Statistics Dashboard */}
+            {invoices.length > 0 && (
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
+                gap: '1rem', 
+                marginBottom: '2rem' 
+              }}>
+                <div style={{ padding: '1rem', background: 'rgba(129, 140, 248, 0.1)', borderRadius: '8px', border: '1px solid rgba(129, 140, 248, 0.2)' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Total</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#e2e8f0' }}>{invoiceStats.total}</div>
+                </div>
+                <div style={{ padding: '1rem', background: 'rgba(251, 191, 36, 0.1)', borderRadius: '8px', border: '1px solid rgba(251, 191, 36, 0.2)' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Pending</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fbbf24' }}>{invoiceStats.pending}</div>
+                </div>
+                <div style={{ padding: '1rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Paid</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#86efac' }}>{invoiceStats.paid}</div>
+                </div>
+                <div style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Expired</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fca5a5' }}>{invoiceStats.expired}</div>
+                </div>
+                <div style={{ padding: '1rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Total Paid</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#86efac' }}>{invoiceStats.totalAmount.toFixed(2)}</div>
+                </div>
+              </div>
+            )}
 
             {!selectedInvoice ? (
               <>
                 {/* Create New Invoice */}
                 <div style={{ marginBottom: '2rem', padding: '1.5rem', background: 'rgba(129, 140, 248, 0.1)', borderRadius: '12px', border: '1px solid rgba(129, 140, 248, 0.2)' }}>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '1rem' }}>
-                    Create New Invoice
-                  </h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#e2e8f0' }}>
+                      Create New Invoice
+                    </h3>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      {invoiceTemplates.length > 0 && (
+                        <button
+                          onClick={() => setShowTemplateModal(true)}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            fontSize: '0.85rem',
+                            background: 'rgba(129, 140, 248, 0.2)',
+                            color: '#a78bfa',
+                            border: '1px solid rgba(129, 140, 248, 0.3)',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Load Template
+                        </button>
+                      )}
+                      <button
+                        onClick={saveAsTemplate}
+                        disabled={!newInvoice.title}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          fontSize: '0.85rem',
+                          background: !newInvoice.title ? 'rgba(71, 85, 105, 0.5)' : 'rgba(34, 197, 94, 0.2)',
+                          color: !newInvoice.title ? '#94a3b8' : '#86efac',
+                          border: `1px solid ${!newInvoice.title ? 'rgba(71, 85, 105, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`,
+                          borderRadius: '6px',
+                          cursor: !newInvoice.title ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        Save Template
+                      </button>
+                    </div>
+                  </div>
 
                   <div style={{ marginBottom: '1rem' }}>
                     <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
@@ -4025,9 +4265,35 @@ function App() {
 
                 {/* Invoice List */}
                 <div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '1rem' }}>
-                    Your Invoices ({invoices.length})
-                  </h3>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#e2e8f0' }}>
+                      Your Invoices ({invoices.length})
+                    </h3>
+                    {invoices.length > 0 && (
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {(['all', 'pending', 'paid', 'expired'] as const).map((filter) => (
+                          <button
+                            key={filter}
+                            onClick={() => setInvoiceFilter(filter)}
+                            style={{
+                              padding: '0.5rem 1rem',
+                              fontSize: '0.85rem',
+                              background: invoiceFilter === filter 
+                                ? 'rgba(129, 140, 248, 0.3)' 
+                                : 'rgba(71, 85, 105, 0.5)',
+                              color: invoiceFilter === filter ? '#e2e8f0' : '#94a3b8',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              textTransform: 'capitalize'
+                            }}
+                          >
+                            {filter}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   {invoices.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
@@ -4035,7 +4301,9 @@ function App() {
                     </div>
                   ) : (
                     <div style={{ display: 'grid', gap: '1rem' }}>
-                      {invoices.map((invoice) => (
+                      {invoices
+                        .filter(inv => invoiceFilter === 'all' || inv.status === invoiceFilter)
+                        .map((invoice) => (
                         <div
                           key={invoice.id}
                           onClick={() => setSelectedInvoice(invoice)}
@@ -4068,9 +4336,17 @@ function App() {
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
                             <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem', fontFamily: 'monospace' }}>
+                                {invoice.invoiceNumber || invoice.id}
+                              </div>
                               <div style={{ fontSize: '1.1rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.25rem' }}>
                                 {invoice.title}
                               </div>
+                              {invoice.clientName && (
+                                <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '0.25rem' }}>
+                                  Client: {invoice.clientName}
+                                </div>
+                              )}
                               {invoice.description && (
                                 <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
                                   {invoice.description}
@@ -4110,6 +4386,92 @@ function App() {
                     </div>
                   )}
                 </div>
+
+                {/* Template Modal */}
+                {showTemplateModal && (
+                  <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0, 0, 0, 0.7)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000
+                  }}>
+                    <div style={{
+                      background: 'rgba(15, 23, 42, 0.95)',
+                      padding: '2rem',
+                      borderRadius: '16px',
+                      border: '1px solid rgba(71, 85, 105, 0.3)',
+                      maxWidth: '500px',
+                      width: '90%',
+                      maxHeight: '80vh',
+                      overflowY: 'auto'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#e2e8f0' }}>
+                          Load Template
+                        </h3>
+                        <button
+                          onClick={() => setShowTemplateModal(false)}
+                          style={{
+                            padding: '0.5rem',
+                            background: 'rgba(71, 85, 105, 0.5)',
+                            color: '#e2e8f0',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '1.2rem'
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      {invoiceTemplates.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                          No templates saved yet. Create an invoice and save it as a template.
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+                          {invoiceTemplates.map((template) => (
+                            <div
+                              key={template.id}
+                              onClick={() => loadTemplate(template)}
+                              style={{
+                                padding: '1rem',
+                                background: 'rgba(129, 140, 248, 0.1)',
+                                border: '1px solid rgba(129, 140, 248, 0.2)',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(129, 140, 248, 0.2)';
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(129, 140, 248, 0.1)';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }}
+                            >
+                              <div style={{ fontSize: '1rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.25rem' }}>
+                                {template.name}
+                              </div>
+                              {template.description && (
+                                <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+                                  {template.description}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               /* Invoice Detail View */
@@ -4173,9 +4535,30 @@ function App() {
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '2rem', fontWeight: 700, color: '#a78bfa' }}>
-                        {selectedInvoice.amount} {selectedInvoice.tokenSymbol}
-                      </div>
+                      {selectedInvoice.totalAmount && selectedInvoice.totalAmount !== selectedInvoice.amount ? (
+                        <div>
+                          <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '0.25rem' }}>
+                            Subtotal: {selectedInvoice.amount} {selectedInvoice.tokenSymbol}
+                          </div>
+                          {selectedInvoice.discount && (
+                            <div style={{ fontSize: '0.85rem', color: '#86efac', marginBottom: '0.25rem' }}>
+                              Discount: -{selectedInvoice.discount} {selectedInvoice.tokenSymbol}
+                            </div>
+                          )}
+                          {selectedInvoice.tax && (
+                            <div style={{ fontSize: '0.85rem', color: '#fca5a5', marginBottom: '0.25rem' }}>
+                              Tax: +{selectedInvoice.tax} {selectedInvoice.tokenSymbol}
+                            </div>
+                          )}
+                          <div style={{ fontSize: '2rem', fontWeight: 700, color: '#a78bfa', marginTop: '0.5rem' }}>
+                            {selectedInvoice.totalAmount} {selectedInvoice.tokenSymbol}
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '2rem', fontWeight: 700, color: '#a78bfa' }}>
+                          {selectedInvoice.amount} {selectedInvoice.tokenSymbol}
+                        </div>
+                      )}
                     </div>
                   </div>
 
