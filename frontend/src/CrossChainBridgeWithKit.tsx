@@ -97,9 +97,8 @@ export default function CrossChainBridgeWithKit() {
   
   // Balance for current chain
   const { data: balance } = useBalance({
-    address: activeAddress as `0x${string}`,
+    address: isUsingWagmi && activeAddress ? (activeAddress as `0x${string}`) : undefined,
     chainId: wagmiChain?.id,
-    enabled: isUsingWagmi && !!activeAddress,
   });
 
   const [bridgeState, setBridgeState] = useState<BridgeState>({
@@ -199,14 +198,17 @@ export default function CrossChainBridgeWithKit() {
 
       // Get provider adapter
       let adapter;
-      if (isUsingWagmi && walletClient) {
+      if (isUsingWagmi && walletClient && window.ethereum) {
         // Use Wagmi wallet client
         adapter = await createAdapterFromProvider({
-          provider: window.ethereum,
+          provider: window.ethereum as any,
         });
       } else if (privyWallet) {
         // Use Privy wallet
         const provider = await privyWallet.getEthereumProvider();
+        if (!provider) {
+          throw new Error('Privy provider not available');
+        }
         adapter = await createAdapterFromProvider({
           provider: provider as any,
         });
@@ -215,8 +217,8 @@ export default function CrossChainBridgeWithKit() {
       }
 
       // Get chain names for BridgeKit
-      const sourceChainName = bridgeState.fromChain.bridgeKitName;
-      const destinationChainName = bridgeState.toChain.bridgeKitName;
+      const sourceChainName = bridgeState.fromChain.bridgeKitName as any;
+      const destinationChainName = bridgeState.toChain.bridgeKitName as any;
 
       setBridgeState(prev => ({ ...prev, status: 'bridging' }));
       console.log(`Bridging ${bridgeState.amount} USDC from ${sourceChainName} to ${destinationChainName}`);
@@ -229,7 +231,7 @@ export default function CrossChainBridgeWithKit() {
       console.log('Starting bridge process...');
       console.log('Steps: 1. Approve → 2. Burn → 3. Mint (automatic)');
       
-      const result = await kit.bridge({
+      const result: any = await kit.bridge({
         from: { adapter, chain: sourceChainName },
         to: { adapter, chain: destinationChainName },
         amount: bridgeState.amount,
