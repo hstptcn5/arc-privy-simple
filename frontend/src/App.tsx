@@ -1633,11 +1633,13 @@ function App() {
     }
   }, []);
 
-  useEffect(() => {
-    if (authenticated) {
-      loadTokensFromRegistry();
-    }
-  }, [authenticated, loadTokensFromRegistry]);
+  // Removed auto-load on authentication - user must click "Load Tokens" button manually
+  // This prevents unnecessary API calls on Vercel builds
+  // useEffect(() => {
+  //   if (authenticated) {
+  //     loadTokensFromRegistry();
+  //   }
+  // }, [authenticated, loadTokensFromRegistry]);
 
   // Handle token deployment success
   const handleTokenDeployed = useCallback(async (address: string, _txHash: string, name: string, symbol: string, decimals: number) => {
@@ -2552,41 +2554,73 @@ function App() {
               marginBottom: '2rem',
               boxShadow: '0 4px 16px rgba(129, 140, 248, 0.3)'
             }}>
-              <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                USDC Balance
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  USDC Balance
+                </div>
+                <button
+                  onClick={async () => {
+                    await loadBalance();
+                  }}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.75rem',
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.3)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+                >
+                  Refresh
+                </button>
               </div>
               <div style={{ fontSize: '2rem', fontWeight: 700, color: 'white' }}>
                 {balance ? `${balance} USDC` : 'Loading...'}
               </div>
             </div>
             
-            {deployedTokens.length > 0 && (
-              <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(71, 85, 105, 0.3)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <div style={{ fontSize: '0.9rem', color: '#cbd5e1', fontWeight: 600 }}>
-                    Your Tokens:
-                  </div>
-                  <button
-                    onClick={() => {
-                      console.log('Manual refresh balances...');
-                      loadTokenBalances(deployedTokens);
-                    }}
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      fontSize: '0.75rem',
-                      background: '#818cf8',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = '#a78bfa'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = '#818cf8'}
-                  >
-                    Refresh
-                  </button>
+            <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(71, 85, 105, 0.3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <div style={{ fontSize: '0.9rem', color: '#cbd5e1', fontWeight: 600 }}>
+                  Your Tokens {deployedTokens.length > 0 && `(${deployedTokens.length})`}:
                 </div>
+                <button
+                  onClick={async () => {
+                    console.log('Loading tokens from Registry/localStorage...');
+                    await loadTokensFromRegistry();
+                    // Wait a bit for state to update, then load balances
+                    setTimeout(async () => {
+                      // Get current tokens from state or localStorage
+                      const saved = localStorage.getItem('deployedTokens');
+                      const currentTokens = saved ? JSON.parse(saved) : deployedTokens;
+                      if (currentTokens && currentTokens.length > 0) {
+                        await loadTokenBalances(currentTokens);
+                      }
+                    }, 300);
+                  }}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.85rem',
+                    background: 'rgba(129, 140, 248, 0.2)',
+                    color: '#a78bfa',
+                    border: '1px solid rgba(129, 140, 248, 0.3)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(129, 140, 248, 0.3)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(129, 140, 248, 0.2)'}
+                >
+                  Load Tokens
+                </button>
+              </div>
+              {deployedTokens.length > 0 ? (
                 <div style={{ 
                   display: 'grid', 
                   gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
@@ -2645,8 +2679,24 @@ function App() {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div style={{ 
+                  padding: '2rem', 
+                  textAlign: 'center', 
+                  color: '#94a3b8',
+                  background: 'rgba(30, 41, 59, 0.3)',
+                  borderRadius: '8px',
+                  border: '1px dashed rgba(71, 85, 105, 0.3)'
+                }}>
+                  <div style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+                    No tokens found
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                    Click "Load Tokens" to fetch from Registry or localStorage
+                  </div>
+                </div>
+              )}
+            </div>
             
             <a
               href="https://faucet.circle.com/?_gl=1*h9fy22*_gcl_au*NDczMTU0OTc4LjE3NjE5MTg2OTg."
