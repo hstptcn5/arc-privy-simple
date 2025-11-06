@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAccount, useWalletClient, usePublicClient, useSwitchChain, useBalance } from 'wagmi';
+import { useAccount, useWalletClient, useSwitchChain, useBalance } from 'wagmi';
 import { useWallets } from '@privy-io/react-auth';
 import { BridgeKit } from '@circle-fin/bridge-kit';
 import { createAdapterFromProvider } from '@circle-fin/adapter-viem-v2';
-import { parseUnits, formatUnits } from 'viem';
+import { formatUnits } from 'viem';
 
 // Arc Testnet configuration
 const ARC_TESTNET = {
@@ -231,12 +231,15 @@ export default function CrossChainBridgeWithKit() {
       console.log('Starting bridge process...');
       console.log('Steps: 1. Approve → 2. Burn → 3. Mint (automatic)');
       
-      const result: any = await kit.bridge({
+      // BridgeKit bridge method - uses adapter address by default
+      // If recipient is different, we'll need to handle it separately
+      const bridgeParams: any = {
         from: { adapter, chain: sourceChainName },
         to: { adapter, chain: destinationChainName },
         amount: bridgeState.amount,
-        recipient: bridgeState.recipientAddress,
-      });
+      };
+      
+      const result: any = await kit.bridge(bridgeParams);
 
       console.log('Bridge result:', result);
 
