@@ -11,6 +11,7 @@ import { USDC_ADDRESSES, ERC20_ABI } from './cctpConfig';
 import TokenDetail from './TokenDetail';
 import CrossChainBridge from './CrossChainBridge';
 import CrossChainBridgeWithKit from './CrossChainBridgeWithKit';
+import { MULTISEND_ADDRESS, MULTISEND_ABI, MULTISEND_BYTECODE } from './multisendConfig';
 
 const USDC_NATIVE_DECIMALS = 18; // Native USDC uses 18 decimals on Arc
 const USDC_DISPLAY_DECIMALS = 6; // Display format
@@ -72,7 +73,7 @@ function App() {
   };
 
   // UI States
-  const [activeTab, setActiveTab] = useState<'balance' | 'send' | 'deploy' | 'history' | 'marketplace' | 'bridge'>('balance');
+  const [activeTab, setActiveTab] = useState<'balance' | 'send' | 'deploy' | 'history' | 'marketplace' | 'bridge' | 'batch'>('balance');
   
   // History states
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -99,6 +100,27 @@ function App() {
   const [customTokenAddress, setCustomTokenAddress] = useState('');
   const [customTokenInfo, setCustomTokenInfo] = useState<{name: string, symbol: string, decimals: number} | null>(null);
   const [customTokenBalance, setCustomTokenBalance] = useState<string | null>(null);
+  
+  // Gas fee estimation states
+  const [estimatedGasFee, setEstimatedGasFee] = useState<string | null>(null);
+  const [isEstimatingGas, setIsEstimatingGas] = useState(false);
+  
+  // Real-time transaction status
+  const [txStatus, setTxStatus] = useState<'idle' | 'estimating' | 'pending' | 'confirming' | 'confirmed' | 'error'>('idle');
+  const [currentTxHash, setCurrentTxHash] = useState<string | null>(null);
+  
+  // Batch payments states
+  const [batchRecipients, setBatchRecipients] = useState<Array<{address: string, amount: string}>>([{address: '', amount: ''}]);
+  const [batchToken, setBatchToken] = useState<'usdc' | 'custom' | string>('usdc');
+  const [batchTokenAddress, setBatchTokenAddress] = useState('');
+  const [batchTokenInfo, setBatchTokenInfo] = useState<{name: string, symbol: string, decimals: number} | null>(null);
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchError, setBatchError] = useState('');
+  const [batchResults, setBatchResults] = useState<Array<{address: string, txHash?: string, error?: string}>>([]);
+  
+  // Multisend contract state
+  const [multisendAddress, setMultisendAddress] = useState<string>(() => localStorage.getItem('multisendAddress') || '');
+  const [isDeployingMultisend, setIsDeployingMultisend] = useState(false);
 
   // Get wallet - prioritize external wallets (MetaMask, etc.) over embedded wallet
   // External wallets have walletClientType like 'metamask', 'walletconnect', etc.
@@ -463,6 +485,108 @@ function App() {
     }
   }, [wallet, walletType, isWagmiConnected, getProviderAndSigner]);
 
+  // Estimate gas fee for transaction
+  const estimateGasFee = useCallback(async (transactionType: 'native' | 'erc20', params?: { tokenAddress?: string, decimals?: number }) => {
+    if (!activeAddress) return null;
+    
+    try {
+      const { provider } = await getProviderAndSigner();
+      
+      let gasEstimate: bigint;
+      
+      if (transactionType === 'native') {
+        // Estimate for native USDC transfer
+        const amountToSend = ethers.parseUnits(amount || '0', USDC_NATIVE_DECIMALS);
+        gasEstimate = await provider.estimateGas({
+          from: activeAddress,
+          to: sendToAddress,
+          value: amountToSend,
+        });
+      } else {
+        // Estimate for ERC20 transfer
+        if (!params?.tokenAddress || !params?.decimals) return null;
+        
+        const TokenABI = [
+          { 
+            inputs: [
+              { internalType: 'address', name: 'to', type: 'address' },
+              { internalType: 'uint256', name: 'value', type: 'uint256' }
+            ], 
+            name: 'transfer', 
+            outputs: [{ internalType: 'bool', name: '', type: 'bool' }], 
+            stateMutability: 'nonpayable',
+            type: 'function'
+          },
+        ];
+        
+        const contract = new ethers.Contract(params.tokenAddress, TokenABI, provider);
+        const amountWei = ethers.parseUnits(amount || '0', params.decimals);
+        gasEstimate = await contract.transfer.estimateGas(sendToAddress, amountWei);
+      }
+      
+      // Get fee data
+      const feeData = await provider.getFeeData();
+      const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || 0n;
+      
+      // Calculate fee in USDC (gas * gasPrice)
+      const feeWei = gasEstimate * gasPrice;
+      const feeInUSDC = ethers.formatUnits(feeWei, USDC_NATIVE_DECIMALS);
+      
+      // Format to show ~$0.01 (Arc's typical fee)
+      const feeNum = parseFloat(feeInUSDC);
+      if (feeNum < 0.01) {
+        return '~$0.01';
+      }
+      return `~$${feeNum.toFixed(4)}`;
+    } catch (err: any) {
+      console.error('Error estimating gas:', err);
+      // Fallback to Arc's typical fee
+      return '~$0.01';
+    }
+  }, [activeAddress, amount, sendToAddress, getProviderAndSigner]);
+
+  // Estimate gas when form changes
+  useEffect(() => {
+    if (!sendToAddress || !amount || !activeAddress) {
+      setEstimatedGasFee(null);
+      return;
+    }
+
+    const estimate = async () => {
+      setIsEstimatingGas(true);
+      try {
+        if (selectedToken === 'usdc') {
+          const fee = await estimateGasFee('native');
+          setEstimatedGasFee(fee);
+        } else if (selectedToken === 'custom' && customTokenInfo) {
+          const fee = await estimateGasFee('erc20', {
+            tokenAddress: customTokenAddress,
+            decimals: customTokenInfo.decimals
+          });
+          setEstimatedGasFee(fee);
+        } else if (selectedToken !== 'usdc' && selectedToken !== 'custom') {
+          const token = deployedTokens.find(t => t.address === selectedToken);
+          if (token) {
+            const fee = await estimateGasFee('erc20', {
+              tokenAddress: token.address,
+              decimals: token.decimals
+            });
+            setEstimatedGasFee(fee);
+          }
+        }
+      } catch (err) {
+        console.error('Error estimating gas fee:', err);
+        setEstimatedGasFee('~$0.01'); // Fallback
+      } finally {
+        setIsEstimatingGas(false);
+      }
+    };
+
+    // Debounce estimation
+    const timeoutId = setTimeout(estimate, 500);
+    return () => clearTimeout(timeoutId);
+  }, [sendToAddress, amount, selectedToken, customTokenAddress, customTokenInfo, deployedTokens, activeAddress, estimateGasFee]);
+
   // Send Token (USDC or ERC20)
   const sendToken = async () => {
     // Check wallet connection based on walletType
@@ -494,27 +618,41 @@ function App() {
     setLoading(true);
     setError('');
     setResult(null);
+    setTxStatus('estimating');
 
-    try {
+      try {
       const { signer } = await getProviderAndSigner();
 
       if (selectedToken === 'usdc') {
         // Send native USDC
         const amountToSend = ethers.parseUnits(amountNum.toString(), USDC_NATIVE_DECIMALS);
         
+        setTxStatus('pending');
         console.log(`Sending ${amountNum} USDC to ${sendToAddress}...`);
         const tx = await signer.sendTransaction({
           to: sendToAddress,
           value: amountToSend,
         });
 
+        setCurrentTxHash(tx.hash);
+        setTxStatus('confirming');
         console.log(`Transaction submitted: ${tx.hash}`);
+        
+        // Wait for confirmation with real-time status
         const receipt = await tx.wait();
+        setTxStatus('confirmed');
         console.log(`Transaction confirmed!`);
         
         setResult({ txHash: receipt!.hash });
-        setSendToAddress('');
-        setAmount('');
+        
+        // Reset after a moment
+        setTimeout(() => {
+          setTxStatus('idle');
+          setCurrentTxHash(null);
+          setSendToAddress('');
+          setAmount('');
+        }, 2000);
+        
         await loadBalance();
       } else {
         // Send ERC20 token
@@ -565,16 +703,29 @@ function App() {
         const contract = new ethers.Contract(tokenAddress, TokenABI, signer);
         const amountWei = ethers.parseUnits(amountNum.toString(), decimals);
         
+        setTxStatus('pending');
         console.log(`Sending ${amountNum} ${tokenSymbol} to ${sendToAddress}...`);
         
         const tx = await contract.transfer(sendToAddress, amountWei);
+        
+        setCurrentTxHash(tx.hash);
+        setTxStatus('confirming');
         console.log(`Transaction submitted: ${tx.hash}`);
+        
+        // Wait for confirmation with real-time status
         const receipt = await tx.wait();
+        setTxStatus('confirmed');
         console.log(`Transaction confirmed!`);
 
         setResult({ txHash: receipt!.hash });
-        setSendToAddress('');
-        setAmount('');
+        
+        // Reset after a moment
+        setTimeout(() => {
+          setTxStatus('idle');
+          setCurrentTxHash(null);
+          setSendToAddress('');
+          setAmount('');
+        }, 2000);
         
         // Reload balances
         await loadBalance();
@@ -586,9 +737,181 @@ function App() {
       }
     } catch (err: any) {
       console.error('Error sending token:', err);
+      setTxStatus('error');
       setError(`Failed to send: ${err.message}`);
+      setTimeout(() => {
+        setTxStatus('idle');
+        setCurrentTxHash(null);
+      }, 3000);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Batch Payments - Send to multiple recipients using Multisend contract (single transaction)
+  const sendBatchPayments = async () => {
+    // Check wallet connection
+    if (walletType === 'metamask' && !isWagmiConnected) {
+      setBatchError('Please connect MetaMask first');
+      return;
+    }
+    if (walletType === 'privy' && (!authenticated || !wallet)) {
+      setBatchError('Please login first');
+      return;
+    }
+
+    // Validate recipients
+    const validRecipients = batchRecipients.filter(r => 
+      r.address && ethers.isAddress(r.address) && r.amount && parseFloat(r.amount) > 0
+    );
+
+    if (validRecipients.length === 0) {
+      setBatchError('Please add at least one valid recipient');
+      return;
+    }
+
+    // Check if Multisend contract address is set
+    const currentMultisendAddress = multisendAddress || MULTISEND_ADDRESS || localStorage.getItem('multisendAddress');
+    if (!currentMultisendAddress || !ethers.isAddress(currentMultisendAddress)) {
+      setBatchError('Multisend contract address not set. Please deploy Multisend contract first or set the address in localStorage (multisendAddress)');
+      return;
+    }
+
+    setBatchLoading(true);
+    setBatchError('');
+    setBatchResults([]);
+
+    try {
+      const { signer } = await getProviderAndSigner();
+      
+      // Prepare recipients and amounts arrays
+      const recipients = validRecipients.map(r => r.address);
+      let amounts: bigint[];
+      let totalAmount: bigint = 0n;
+
+      if (batchToken === 'usdc') {
+        // Native USDC - amounts in wei
+        amounts = validRecipients.map(r => {
+          const amount = ethers.parseUnits(r.amount, USDC_NATIVE_DECIMALS);
+          totalAmount += amount;
+          return amount;
+        });
+
+        // Use Multisend contract for native USDC
+        const multisendContract = new ethers.Contract(currentMultisendAddress, MULTISEND_ABI, signer);
+        
+        console.log(`Sending batch of ${recipients.length} native USDC transfers...`);
+        const tx = await multisendContract.batchSendNative(recipients, amounts, { value: totalAmount });
+        
+        console.log(`Batch transaction submitted: ${tx.hash}`);
+        const receipt = await tx.wait();
+        console.log(`Batch transaction confirmed!`);
+        
+        // All recipients succeeded in one transaction
+        const results = recipients.map(addr => ({ address: addr, txHash: receipt.hash }));
+        setBatchResults(results);
+      } else {
+        // ERC20 tokens
+        let tokenAddress: string;
+        let decimals: number;
+        let tokenSymbol: string;
+
+        if (batchToken === 'custom') {
+          // Custom token address
+          if (!batchTokenAddress || !ethers.isAddress(batchTokenAddress)) {
+            setBatchError('Invalid custom token address');
+            setBatchLoading(false);
+            return;
+          }
+          if (!batchTokenInfo) {
+            setBatchError('Please wait for token info to load');
+            setBatchLoading(false);
+            return;
+          }
+          tokenAddress = batchTokenAddress;
+          decimals = batchTokenInfo.decimals;
+          tokenSymbol = batchTokenInfo.symbol;
+        } else {
+          // Deployed token
+          const token = deployedTokens.find(t => t.address === batchToken);
+          if (!token) {
+            setBatchError('Token not found');
+            setBatchLoading(false);
+            return;
+          }
+          tokenAddress = token.address;
+          decimals = token.decimals;
+          tokenSymbol = token.symbol;
+        }
+
+        amounts = validRecipients.map(r => {
+          return ethers.parseUnits(r.amount, decimals);
+        });
+
+        // For ERC20, we need to approve Multisend contract first
+        const TokenABI = [
+          { 
+            inputs: [
+              { internalType: 'address', name: 'spender', type: 'address' },
+              { internalType: 'uint256', name: 'amount', type: 'uint256' }
+            ], 
+            name: 'approve', 
+            outputs: [{ internalType: 'bool', name: '', type: 'bool' }], 
+            stateMutability: 'nonpayable',
+            type: 'function'
+          },
+          {
+            inputs: [
+              { internalType: 'address', name: 'owner', type: 'address' },
+              { internalType: 'address', name: 'spender', type: 'address' }
+            ],
+            name: 'allowance',
+            outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+            stateMutability: 'view',
+            type: 'function'
+          }
+        ];
+
+        const tokenContract = new ethers.Contract(tokenAddress, TokenABI, signer);
+        
+        // Calculate total amount needed
+        totalAmount = amounts.reduce((sum, amount) => sum + amount, 0n);
+        
+        // Check current allowance
+        const currentAllowance = await tokenContract.allowance(activeAddress, currentMultisendAddress);
+        
+        if (currentAllowance < totalAmount) {
+          console.log(`Approving Multisend contract to spend ${ethers.formatUnits(totalAmount, decimals)} ${tokenSymbol}...`);
+          const approveTx = await tokenContract.approve(currentMultisendAddress, totalAmount);
+          await approveTx.wait();
+          console.log('Approval confirmed');
+        }
+
+        // Use Multisend contract for ERC20
+        const multisendContract = new ethers.Contract(currentMultisendAddress, MULTISEND_ABI, signer);
+        
+        console.log(`Sending batch of ${recipients.length} ERC20 transfers...`);
+        const tx = await multisendContract.batchSendERC20Direct(tokenAddress, recipients, amounts);
+        
+        console.log(`Batch transaction submitted: ${tx.hash}`);
+        const receipt = await tx.wait();
+        console.log(`Batch transaction confirmed!`);
+        
+        // All recipients succeeded in one transaction
+        const results = recipients.map(addr => ({ address: addr, txHash: receipt.hash }));
+        setBatchResults(results);
+      }
+      
+      // Reload balance after batch
+      await loadBalance();
+      if (batchToken !== 'usdc') {
+        await loadTokenBalances(deployedTokens);
+      }
+    } catch (err: any) {
+      console.error('Error in batch payments:', err);
+      setBatchError(`Batch payment failed: ${err.message}`);
+    } finally {
+      setBatchLoading(false);
     }
   };
 
@@ -1732,6 +2055,35 @@ function App() {
           >
             Bridge
           </button>
+          <button
+            onClick={() => setActiveTab('batch')}
+            style={{
+              padding: '1rem 1.5rem',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              background: activeTab === 'batch' ? 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)' : 'rgba(30, 41, 59, 0.6)',
+              color: activeTab === 'batch' ? 'white' : '#cbd5e1',
+              border: 'none',
+              borderBottom: activeTab === 'batch' ? '3px solid #818cf8' : '3px solid transparent',
+              borderRadius: '12px 12px 0 0',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              whiteSpace: 'nowrap',
+              boxShadow: activeTab === 'batch' ? '0 4px 12px rgba(129, 140, 248, 0.3)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'batch') {
+                e.currentTarget.style.background = 'rgba(51, 65, 85, 0.8)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'batch') {
+                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+              }
+            }}
+          >
+            Batch
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -2109,6 +2461,91 @@ function App() {
               </div>
             )}
 
+            {/* Gas Fee Estimation */}
+            {estimatedGasFee && sendToAddress && amount && (
+              <div style={{ 
+                marginBottom: '1rem', 
+                padding: '0.75rem', 
+                background: 'rgba(129, 140, 248, 0.1)',
+                border: '1px solid rgba(129, 140, 248, 0.2)',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                color: '#a78bfa',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                {isEstimatingGas ? (
+                  <>Estimating gas fee...</>
+                ) : (
+                  <>Estimated gas fee: {estimatedGasFee} USDC</>
+                )}
+              </div>
+            )}
+
+            {/* Real-time Transaction Status */}
+            {txStatus !== 'idle' && (
+              <div style={{ 
+                marginBottom: '1rem', 
+                padding: '1rem', 
+                background: txStatus === 'error' 
+                  ? 'rgba(239, 68, 68, 0.15)' 
+                  : txStatus === 'confirmed'
+                  ? 'rgba(34, 197, 94, 0.15)'
+                  : 'rgba(129, 140, 248, 0.15)',
+                border: `1px solid ${txStatus === 'error' 
+                  ? 'rgba(239, 68, 68, 0.3)' 
+                  : txStatus === 'confirmed'
+                  ? 'rgba(34, 197, 94, 0.3)'
+                  : 'rgba(129, 140, 248, 0.3)'}`,
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                color: txStatus === 'error' 
+                  ? '#fca5a5' 
+                  : txStatus === 'confirmed'
+                  ? '#86efac'
+                  : '#a78bfa'
+              }}>
+                {txStatus === 'estimating' && 'Estimating gas...'}
+                {txStatus === 'pending' && 'Transaction pending...'}
+                {txStatus === 'confirming' && (
+                  <>
+                    Confirming transaction...
+                    {currentTxHash && (
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', opacity: 0.8 }}>
+                        <a 
+                          href={`https://testnet.arcscan.app/tx/${currentTxHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit', textDecoration: 'underline' }}
+                        >
+                          View on Arcscan
+                        </a>
+                      </div>
+                    )}
+                  </>
+                )}
+                {txStatus === 'confirmed' && (
+                  <>
+                    Transaction confirmed!
+                    {currentTxHash && (
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', opacity: 0.8 }}>
+                        <a 
+                          href={`https://testnet.arcscan.app/tx/${currentTxHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit', textDecoration: 'underline' }}
+                        >
+                          View on Arcscan
+                        </a>
+                      </div>
+                    )}
+                  </>
+                )}
+                {txStatus === 'error' && 'Transaction failed'}
+              </div>
+            )}
+
             <button 
               onClick={sendToken} 
               disabled={loading || (selectedToken === 'custom' && !customTokenInfo)}
@@ -2128,7 +2565,12 @@ function App() {
               onMouseEnter={(e) => !loading && !(selectedToken === 'custom' && !customTokenInfo) && (e.currentTarget.style.transform = 'scale(1.02)')}
               onMouseLeave={(e) => !loading && (e.currentTarget.style.transform = 'scale(1)')}
             >
-              {loading ? 'Sending...' : `Send ${selectedToken === 'usdc' 
+              {loading ? (
+                txStatus === 'estimating' ? 'Estimating...' :
+                txStatus === 'pending' ? 'Pending...' :
+                txStatus === 'confirming' ? 'Confirming...' :
+                'Sending...'
+              ) : `Send ${selectedToken === 'usdc' 
                 ? 'USDC' 
                 : selectedToken === 'custom' && customTokenInfo
                   ? customTokenInfo.symbol
@@ -2702,6 +3144,426 @@ function App() {
             </div>
             )}
           </>
+        )}
+
+        {activeTab === 'batch' && (
+          <div style={{ padding: '2rem', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '1rem' }}>
+              Batch Payments
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: '#94a3b8', marginBottom: '1rem' }}>
+              Send tokens to multiple recipients in a single transaction (no need to sign 100 times!)
+            </p>
+
+            {/* Multisend Contract Address - Only show deployment UI if not set */}
+            {!multisendAddress ? (
+              <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(129, 140, 248, 0.1)', borderRadius: '8px', border: '1px solid rgba(129, 140, 248, 0.2)' }}>
+                <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
+                  Multisend Contract Address:
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    placeholder="0x..."
+                    value={multisendAddress}
+                    onChange={(e) => {
+                      if (ethers.isAddress(e.target.value) || e.target.value === '') {
+                        setMultisendAddress(e.target.value);
+                        localStorage.setItem('multisendAddress', e.target.value);
+                        setBatchError('');
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '0.75rem',
+                      fontSize: '0.9rem',
+                      fontFamily: 'monospace',
+                      border: '2px solid rgba(71, 85, 105, 0.5)',
+                      borderRadius: '8px',
+                      outline: 'none',
+                      background: 'rgba(30, 41, 59, 0.6)',
+                      color: '#e2e8f0'
+                    }}
+                  />
+                  <button
+                    onClick={async () => {
+                      try {
+                        setIsDeployingMultisend(true);
+                        const { signer } = await getProviderAndSigner();
+                        const factory = new ethers.ContractFactory(MULTISEND_ABI, MULTISEND_BYTECODE, signer);
+                        console.log('Deploying Multisend contract...');
+                        const contract = await factory.deploy();
+                        await contract.waitForDeployment();
+                        const address = await contract.getAddress();
+                        console.log('Multisend deployed at:', address);
+                        setMultisendAddress(address);
+                        localStorage.setItem('multisendAddress', address);
+                        setBatchError('');
+                        alert(`Multisend contract deployed successfully at: ${address}`);
+                      } catch (err: any) {
+                        console.error('Error deploying Multisend:', err);
+                        setBatchError(`Failed to deploy: ${err.message}`);
+                      } finally {
+                        setIsDeployingMultisend(false);
+                      }
+                    }}
+                    disabled={isDeployingMultisend}
+                    style={{
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.85rem',
+                      background: isDeployingMultisend ? 'rgba(71, 85, 105, 0.5)' : 'rgba(34, 197, 94, 0.2)',
+                      color: isDeployingMultisend ? '#94a3b8' : '#86efac',
+                      border: `1px solid ${isDeployingMultisend ? 'rgba(71, 85, 105, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`,
+                      borderRadius: '8px',
+                      cursor: isDeployingMultisend ? 'not-allowed' : 'pointer',
+                      whiteSpace: 'nowrap',
+                      fontWeight: 600
+                    }}
+                    onMouseEnter={(e) => !isDeployingMultisend && (e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)')}
+                    onMouseLeave={(e) => !isDeployingMultisend && (e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)')}
+                  >
+                    {isDeployingMultisend ? 'Deploying...' : 'Deploy Contract'}
+                  </button>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
+                  Please set or deploy Multisend contract address to enable batch transfers
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
+                <div style={{ fontSize: '0.85rem', color: '#86efac', fontWeight: 600, marginBottom: '0.25rem' }}>
+                  Multisend Contract Ready
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                  Using: {multisendAddress.slice(0, 10)}...{multisendAddress.slice(-8)}
+                </div>
+              </div>
+            )}
+
+            {/* Token Selection */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
+                Select Token:
+              </label>
+              <select
+                value={batchToken}
+                onChange={(e) => {
+                  setBatchToken(e.target.value);
+                  setBatchTokenAddress('');
+                  setBatchTokenInfo(null);
+                  setBatchError('');
+                }}
+                disabled={batchLoading}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  fontSize: '1rem',
+                  border: '2px solid rgba(71, 85, 105, 0.5)',
+                  borderRadius: '8px',
+                  outline: 'none',
+                  background: 'rgba(30, 41, 59, 0.6)',
+                  color: '#e2e8f0'
+                }}
+              >
+                <option value="usdc">USDC (Native)</option>
+                {deployedTokens.map((token) => (
+                  <option key={token.address} value={token.address}>
+                    {token.name} ({token.symbol})
+                  </option>
+                ))}
+                <option value="custom">Custom ERC20 Token Address</option>
+              </select>
+            </div>
+
+            {/* Custom Token Address Input */}
+            {batchToken === 'custom' && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
+                  Token Contract Address:
+                </label>
+                <input
+                  type="text"
+                  placeholder="0x..."
+                  value={batchTokenAddress}
+                  onChange={async (e) => {
+                    setBatchTokenAddress(e.target.value);
+                    if (e.target.value && ethers.isAddress(e.target.value)) {
+                      try {
+                        const { provider } = await getProviderAndSigner();
+                        const ERC20_ABI_FULL = [
+                          { constant: true, inputs: [], name: 'name', outputs: [{ name: '', type: 'string' }], type: 'function' },
+                          { constant: true, inputs: [], name: 'symbol', outputs: [{ name: '', type: 'string' }], type: 'function' },
+                          { constant: true, inputs: [], name: 'decimals', outputs: [{ name: '', type: 'uint8' }], type: 'function' }
+                        ];
+                        const contract = new ethers.Contract(e.target.value, ERC20_ABI_FULL, provider);
+                        const [name, symbol, decimals] = await Promise.all([
+                          contract.name(),
+                          contract.symbol(),
+                          contract.decimals()
+                        ]);
+                        setBatchTokenInfo({ name, symbol, decimals: Number(decimals) });
+                        setBatchError('');
+                      } catch (err: any) {
+                        console.error('Error loading token info:', err);
+                        setBatchTokenInfo(null);
+                        setBatchError(`Failed to load token info: ${err.message}`);
+                      }
+                    } else {
+                      setBatchTokenInfo(null);
+                      setBatchError('');
+                    }
+                  }}
+                  disabled={batchLoading}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    fontSize: '0.9rem',
+                    fontFamily: 'monospace',
+                    border: '2px solid rgba(71, 85, 105, 0.5)',
+                    borderRadius: '8px',
+                    outline: 'none',
+                    background: 'rgba(30, 41, 59, 0.6)',
+                    color: '#e2e8f0'
+                  }}
+                />
+                {batchTokenInfo && (
+                  <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(129, 140, 248, 0.15)', borderRadius: '6px', fontSize: '0.85rem', border: '1px solid rgba(129, 140, 248, 0.2)' }}>
+                    <div style={{ color: '#e2e8f0' }}><strong>{batchTokenInfo.name}</strong> ({batchTokenInfo.symbol})</div>
+                    <div style={{ color: '#cbd5e1', marginTop: '0.25rem' }}>
+                      Decimals: {batchTokenInfo.decimals}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Recipients List */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ fontSize: '0.9rem', color: '#cbd5e1', fontWeight: 600 }}>
+                  Recipients:
+                </label>
+                <button
+                  onClick={() => setBatchRecipients([...batchRecipients, {address: '', amount: ''}])}
+                  disabled={batchLoading}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.85rem',
+                    background: 'rgba(129, 140, 248, 0.2)',
+                    color: '#a78bfa',
+                    border: '1px solid rgba(129, 140, 248, 0.3)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => !batchLoading && (e.currentTarget.style.background = 'rgba(129, 140, 248, 0.3)')}
+                  onMouseLeave={(e) => !batchLoading && (e.currentTarget.style.background = 'rgba(129, 140, 248, 0.2)')}
+                >
+                  + Add Recipient
+                </button>
+              </div>
+
+              {batchRecipients.map((recipient, index) => (
+                <div key={index} style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: '2fr 1fr auto', 
+                  gap: '0.75rem', 
+                  marginBottom: '0.75rem',
+                  alignItems: 'center'
+                }}>
+                  <input
+                    type="text"
+                    placeholder="0x..."
+                    value={recipient.address}
+                    onChange={(e) => {
+                      const updated = [...batchRecipients];
+                      updated[index].address = e.target.value;
+                      setBatchRecipients(updated);
+                    }}
+                    disabled={batchLoading}
+                    style={{
+                      padding: '0.75rem',
+                      fontSize: '0.9rem',
+                      fontFamily: 'monospace',
+                      border: '2px solid rgba(71, 85, 105, 0.5)',
+                      borderRadius: '8px',
+                      outline: 'none',
+                      background: 'rgba(30, 41, 59, 0.6)',
+                      color: '#e2e8f0'
+                    }}
+                  />
+                  <input
+                    type="number"
+                    placeholder="0.0"
+                    value={recipient.amount}
+                    onChange={(e) => {
+                      const updated = [...batchRecipients];
+                      updated[index].amount = e.target.value;
+                      setBatchRecipients(updated);
+                    }}
+                    disabled={batchLoading}
+                    min="0.000001"
+                    step="0.000001"
+                    style={{
+                      padding: '0.75rem',
+                      fontSize: '0.9rem',
+                      border: '2px solid rgba(71, 85, 105, 0.5)',
+                      borderRadius: '8px',
+                      outline: 'none',
+                      background: 'rgba(30, 41, 59, 0.6)',
+                      color: '#e2e8f0'
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      const updated = batchRecipients.filter((_, i) => i !== index);
+                      setBatchRecipients(updated.length > 0 ? updated : [{address: '', amount: ''}]);
+                    }}
+                    disabled={batchLoading || batchRecipients.length === 1}
+                    style={{
+                      padding: '0.75rem 1rem',
+                      fontSize: '0.9rem',
+                      background: 'rgba(239, 68, 68, 0.2)',
+                      color: '#fca5a5',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      borderRadius: '6px',
+                      cursor: (batchLoading || batchRecipients.length === 1) ? 'not-allowed' : 'pointer',
+                      opacity: (batchLoading || batchRecipients.length === 1) ? 0.5 : 1
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Batch Summary */}
+            {batchRecipients.filter(r => r.address && r.amount).length > 0 && (
+              <div style={{ 
+                marginBottom: '1.5rem', 
+                padding: '1rem', 
+                background: 'rgba(129, 140, 248, 0.1)',
+                border: '1px solid rgba(129, 140, 248, 0.2)',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                color: '#a78bfa'
+              }}>
+                <strong>Batch Summary:</strong> Sending to {batchRecipients.filter(r => r.address && r.amount).length} recipient(s)
+                <br />
+                Total Amount: {batchRecipients
+                  .filter(r => r.address && r.amount)
+                  .reduce((sum, r) => sum + parseFloat(r.amount || '0'), 0)
+                  .toFixed(6)} {batchToken === 'usdc' 
+                    ? 'USDC' 
+                    : batchToken === 'custom' 
+                      ? batchTokenInfo?.symbol || 'TOKEN'
+                      : deployedTokens.find(t => t.address === batchToken)?.symbol || 'TOKEN'}
+              </div>
+            )}
+
+            {/* Error Display */}
+            {batchError && (
+              <div style={{ 
+                marginBottom: '1rem', 
+                padding: '1rem', 
+                background: 'rgba(239, 68, 68, 0.2)',
+                borderLeft: '4px solid #ef4444',
+                borderRadius: '4px',
+                color: '#fca5a5',
+                fontSize: '0.9rem'
+              }}>
+                {batchError}
+              </div>
+            )}
+
+            {/* Send Button */}
+            <button
+              onClick={sendBatchPayments}
+              disabled={batchLoading || batchRecipients.filter(r => r.address && r.amount).length === 0}
+              style={{
+                padding: '1rem 2rem',
+                fontSize: '1.1rem',
+                background: (batchLoading || batchRecipients.filter(r => r.address && r.amount).length === 0)
+                  ? 'rgba(71, 85, 105, 0.5)'
+                  : 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: (batchLoading || batchRecipients.filter(r => r.address && r.amount).length === 0) ? 'not-allowed' : 'pointer',
+                fontWeight: 600,
+                width: '100%',
+                transition: 'transform 0.2s',
+                marginBottom: '1.5rem'
+              }}
+            >
+              {batchLoading ? 'Processing Batch...' : `Send Batch (${batchRecipients.filter(r => r.address && r.amount).length} recipients)`}
+            </button>
+
+            {/* Results */}
+            {batchResults.length > 0 && (
+              <div style={{ marginTop: '1.5rem' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '1rem' }}>
+                  Batch Results:
+                </h3>
+                <div style={{ 
+                  display: 'grid', 
+                  gap: '0.75rem',
+                  maxHeight: '400px',
+                  overflowY: 'auto'
+                }}>
+                  {batchResults.map((result, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: '1rem',
+                        background: result.error 
+                          ? 'rgba(239, 68, 68, 0.1)'
+                          : 'rgba(34, 197, 94, 0.1)',
+                        border: `1px solid ${result.error ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`,
+                        borderRadius: '8px',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      <div style={{ 
+                        color: result.error ? '#fca5a5' : '#86efac',
+                        marginBottom: '0.25rem',
+                        fontWeight: 600
+                      }}>
+                        {result.error ? 'Failed' : 'Success'}
+                      </div>
+                      <div style={{ 
+                        color: '#cbd5e1',
+                        fontFamily: 'monospace',
+                        fontSize: '0.75rem',
+                        marginBottom: '0.25rem'
+                      }}>
+                        {result.address.slice(0, 8)}...{result.address.slice(-6)}
+                      </div>
+                      {result.txHash && (
+                        <a
+                          href={`https://testnet.arcscan.app/tx/${result.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: '#818cf8',
+                            textDecoration: 'underline',
+                            fontSize: '0.75rem'
+                          }}
+                        >
+                          View Transaction
+                        </a>
+                      )}
+                      {result.error && (
+                        <div style={{ color: '#fca5a5', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                          {result.error}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {activeTab === 'bridge' && (
