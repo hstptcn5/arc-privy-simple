@@ -119,7 +119,11 @@ function App() {
   const [batchResults, setBatchResults] = useState<Array<{address: string, txHash?: string, error?: string}>>([]);
   
   // Multisend contract state
-  const [multisendAddress, setMultisendAddress] = useState<string>(() => localStorage.getItem('multisendAddress') || '');
+  // Initialize from localStorage, or fallback to MULTISEND_ADDRESS from config (for Vercel builds)
+  const [multisendAddress, setMultisendAddress] = useState<string>(() => {
+    const fromStorage = typeof window !== 'undefined' ? localStorage.getItem('multisendAddress') : null;
+    return fromStorage || MULTISEND_ADDRESS || '';
+  });
   const [isDeployingMultisend, setIsDeployingMultisend] = useState(false);
   
   // Invoice/Payment Request states
@@ -3525,7 +3529,7 @@ function App() {
             </p>
 
             {/* Multisend Contract Address - Only show deployment UI if not set */}
-            {!multisendAddress ? (
+            {!multisendAddress && !MULTISEND_ADDRESS ? (
               <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(129, 140, 248, 0.1)', borderRadius: '8px', border: '1px solid rgba(129, 140, 248, 0.2)' }}>
                 <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
                   Multisend Contract Address:
@@ -3604,7 +3608,7 @@ function App() {
                   Multisend Contract Ready
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'monospace' }}>
-                  Using: {multisendAddress.slice(0, 10)}...{multisendAddress.slice(-8)}
+                  Using: {(multisendAddress || MULTISEND_ADDRESS).slice(0, 10)}...{(multisendAddress || MULTISEND_ADDRESS).slice(-8)}
                 </div>
               </div>
             )}
