@@ -1,12 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ethers } from 'ethers';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { useAccount, useConnect, useDisconnect, useSwitchChain } from 'wagmi';
 import DeployToken from './DeployToken';
 import DeployRegistry from './DeployRegistry';
 import DeployAMM from './DeployAMM';
 import { REGISTRY_ADDRESS, REGISTRY_ABI } from './registryConfig';
 import { AMM_ADDRESS, AMM_ABI } from './ammConfig';
+import { USDC_ADDRESSES, ERC20_ABI } from './cctpConfig';
 import TokenDetail from './TokenDetail';
+import CrossChainBridge from './CrossChainBridge';
+import CrossChainBridgeWithKit from './CrossChainBridgeWithKit';
 
 const USDC_NATIVE_DECIMALS = 18; // Native USDC uses 18 decimals on Arc
 const USDC_DISPLAY_DECIMALS = 6; // Display format
@@ -28,8 +32,47 @@ function App() {
   const { ready, authenticated, login, logout } = usePrivy();
   const { wallets } = useWallets();
   
+  // Wagmi hooks for MetaMask
+  const { address: wagmiAddress, isConnected: isWagmiConnected, chain } = useAccount();
+  const { connect: wagmiConnect, connectors } = useConnect();
+  const { disconnect: wagmiDisconnect } = useDisconnect();
+  const { switchChain } = useSwitchChain();
+  
+  // Wallet selection state - default to Privy if authenticated, otherwise MetaMask
+  const [walletType, setWalletType] = useState<'privy' | 'metamask'>(
+    authenticated ? 'privy' : 'metamask'
+  );
+
+  // Supported testnet chains for network switching
+  const SUPPORTED_NETWORKS = [
+    { id: 5042002, name: 'Arc Testnet', shortName: 'Arc' },
+    { id: 11155111, name: 'Ethereum Sepolia', shortName: 'Sepolia' },
+    { id: 84532, name: 'Base Sepolia', shortName: 'Base' },
+    { id: 421614, name: 'Arbitrum Sepolia', shortName: 'Arbitrum' },
+    { id: 11155420, name: 'Optimism Sepolia', shortName: 'Optimism' },
+  ];
+  
+  // Helper to get active wallet info
+  const getActiveWalletInfo = () => {
+    if (walletType === 'metamask' && isWagmiConnected && wagmiAddress) {
+      return {
+        address: wagmiAddress,
+        type: 'metamask',
+        name: 'MetaMask',
+      };
+    }
+    if (walletType === 'privy' && wallet) {
+      return {
+        address: wallet.address,
+        type: wallet.walletClientType || 'privy',
+        name: wallet.walletClientType === 'privy' ? 'Privy Embedded Wallet' : `External Wallet (${wallet.walletClientType})`,
+      };
+    }
+    return null;
+  };
+
   // UI States
-  const [activeTab, setActiveTab] = useState<'balance' | 'send' | 'deploy' | 'history' | 'marketplace'>('balance');
+  const [activeTab, setActiveTab] = useState<'balance' | 'send' | 'deploy' | 'history' | 'marketplace' | 'bridge'>('balance');
   
   // History states
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -97,6 +140,126 @@ function App() {
     }
   }, [wallet]);
 
+  // Get current active address as a memoized value - used for history to prevent unnecessary fetches
+  const activeAddress = useMemo(() => {
+    if (walletType === 'metamask' && isWagmiConnected && wagmiAddress) {
+      return wagmiAddress;
+    }
+    if (walletType === 'privy' && wallet) {
+      return wallet.address;
+    }
+    return null;
+  }, [walletType, isWagmiConnected, wagmiAddress, wallet]);
+
+  // Helper to get provider and signer based on wallet type
+  const getProviderAndSigner = useCallback(async () => {
+    if (walletType === 'metamask' && isWagmiConnected && window.ethereum) {
+      // Use MetaMask provider from window.ethereum
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const address = wagmiAddress!;
+      return { provider, signer, address };
+    } else if (walletType === 'privy' && wallet) {
+      // Use Privy wallet
+      const privyProvider = await wallet.getEthereumProvider();
+      const provider = new ethers.BrowserProvider(privyProvider);
+      const signer = await provider.getSigner();
+      const address = wallet.address;
+      return { provider, signer, address };
+    }
+    throw new Error('No wallet connected');
+  }, [walletType, isWagmiConnected, wagmiAddress, wallet]);
+
+  // Helper to switch network with auto-add if needed (for MetaMask)
+  const switchNetworkWithAutoAdd = useCallback(async (chainId: number) => {
+    if (!isWagmiConnected || !window.ethereum) {
+      console.error('MetaMask not connected');
+      return;
+    }
+
+    try {
+      // Try to switch chain first
+      await switchChain({ chainId });
+    } catch (err: any) {
+      console.log('Error switching chain, attempting to add network:', err);
+      
+      // If network doesn't exist (error code 4902), add it
+      if (err.code === 4902 || err.code === -32603 || err.message?.includes('unrecognized chain')) {
+        // Get network params
+        const getNetworkParams = (chainId: number) => {
+          switch (chainId) {
+            case 5042002: // Arc Testnet
+              return {
+                chainId: `0x${chainId.toString(16)}`,
+                chainName: 'Arc Testnet',
+                nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
+                rpcUrls: ['https://rpc.testnet.arc.network'],
+                blockExplorerUrls: ['https://testnet.arcscan.app'],
+              };
+            case 11155111: // Ethereum Sepolia
+              return {
+                chainId: `0x${chainId.toString(16)}`,
+                chainName: 'Sepolia',
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                rpcUrls: ['https://rpc.sepolia.org'],
+                blockExplorerUrls: ['https://sepolia.etherscan.io'],
+              };
+            case 84532: // Base Sepolia
+              return {
+                chainId: `0x${chainId.toString(16)}`,
+                chainName: 'Base Sepolia',
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                rpcUrls: ['https://sepolia.base.org'],
+                blockExplorerUrls: ['https://sepolia-explorer.base.org'],
+              };
+            case 421614: // Arbitrum Sepolia
+              return {
+                chainId: `0x${chainId.toString(16)}`,
+                chainName: 'Arbitrum Sepolia',
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                rpcUrls: ['https://sepolia-rollup.arbitrum.io/rpc'],
+                blockExplorerUrls: ['https://sepolia-explorer.arbitrum.io'],
+              };
+            case 11155420: // Optimism Sepolia
+              return {
+                chainId: `0x${chainId.toString(16)}`,
+                chainName: 'Optimism Sepolia',
+                nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                rpcUrls: ['https://sepolia.optimism.io'],
+                blockExplorerUrls: ['https://sepolia-optimism.etherscan.io'],
+              };
+            default:
+              return null;
+          }
+        };
+
+        const networkParams = getNetworkParams(chainId);
+        if (!networkParams) {
+          console.error(`Network params not configured for chain ${chainId}`);
+          return;
+        }
+
+        // Add network to MetaMask
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [networkParams],
+          });
+          console.log(`Successfully added and switched to chain ${chainId}`);
+          
+          // After adding, try to switch again
+          await switchChain({ chainId });
+        } catch (addError: any) {
+          console.error(`Error adding network ${chainId}:`, addError);
+          throw addError;
+        }
+      } else {
+        // Other errors, re-throw
+        throw err;
+      }
+    }
+  }, [isWagmiConnected, switchChain]);
+
   // Switch to Arc Testnet for external wallets (MetaMask, etc.)
   const switchToArcTestnet = useCallback(async () => {
     // Only switch for external wallets, not embedded wallet
@@ -158,36 +321,84 @@ function App() {
 
   // Load balance
   const loadBalance = useCallback(async () => {
-    if (!wallet) return;
+    // Check if we have a valid wallet connection
+    if (walletType === 'metamask' && !isWagmiConnected) return;
+    if (walletType === 'privy' && !wallet) return;
     
     try {
-      const provider = await wallet.getEthereumProvider();
-      const ethersProvider = new ethers.BrowserProvider(provider);
-      const address = wallet.address;
+      let provider: ethers.BrowserProvider;
+      let address: string;
       
-      // Native USDC on Arc uses 18 decimals
-      const bal = await ethersProvider.getBalance(address);
-      const formatted = ethers.formatUnits(bal, USDC_NATIVE_DECIMALS); // Use 18 for native
-      const num = parseFloat(formatted);
-      const final = isNaN(num) ? formatted : num.toFixed(USDC_DISPLAY_DECIMALS).replace(/\.?0+$/, '');
-      setBalance(final);
+      if (walletType === 'metamask' && isWagmiConnected && window.ethereum) {
+        provider = new ethers.BrowserProvider(window.ethereum);
+        address = wagmiAddress!;
+      } else if (walletType === 'privy' && wallet) {
+        const privyProvider = await wallet.getEthereumProvider();
+        provider = new ethers.BrowserProvider(privyProvider);
+        address = wallet.address;
+      } else {
+        return;
+      }
+      
+      const ethersProvider = provider;
+      
+      // Get current chain ID
+      let currentChainId: number;
+      if (walletType === 'metamask' && chain?.id) {
+        // Use wagmi chain ID for MetaMask
+        currentChainId = chain.id;
+      } else {
+        // Get chain ID from provider for Privy wallet
+        const network = await ethersProvider.getNetwork();
+        currentChainId = Number(network.chainId);
+      }
+      
+      // Get USDC address for current chain
+      const usdcAddress = USDC_ADDRESSES[currentChainId];
+      
+      if (usdcAddress) {
+        // Use ERC-20 balance for chains with USDC contract
+        const usdcContract = new ethers.Contract(usdcAddress, ERC20_ABI, ethersProvider);
+        const decimals = await usdcContract.decimals();
+        const bal = await usdcContract.balanceOf(address);
+        const formatted = ethers.formatUnits(bal, decimals);
+        const num = parseFloat(formatted);
+        const final = isNaN(num) ? formatted : num.toFixed(USDC_DISPLAY_DECIMALS).replace(/\.?0+$/, '');
+        setBalance(final);
+      } else {
+        // Fallback to native balance for Arc or chains without USDC contract
+        const bal = await ethersProvider.getBalance(address);
+        const formatted = ethers.formatUnits(bal, USDC_NATIVE_DECIMALS); // Use 18 for native
+        const num = parseFloat(formatted);
+        const final = isNaN(num) ? formatted : num.toFixed(USDC_DISPLAY_DECIMALS).replace(/\.?0+$/, '');
+        setBalance(final);
+      }
     } catch (err: any) {
       console.error('Error loading balance:', err);
     }
-  }, [wallet]);
+  }, [wallet, walletType, chain, isWagmiConnected, wagmiAddress]);
 
   // Load custom token info
   const loadCustomTokenInfo = useCallback(async (tokenAddress: string) => {
-    if (!wallet || !ethers.isAddress(tokenAddress)) {
+    // Check wallet connection
+    if (walletType === 'metamask' && !isWagmiConnected) {
+      setCustomTokenInfo(null);
+      setCustomTokenBalance(null);
+      return;
+    }
+    if (walletType === 'privy' && !wallet) {
+      setCustomTokenInfo(null);
+      setCustomTokenBalance(null);
+      return;
+    }
+    if (!ethers.isAddress(tokenAddress)) {
       setCustomTokenInfo(null);
       setCustomTokenBalance(null);
       return;
     }
 
     try {
-      const provider = await wallet.getEthereumProvider();
-      const ethersProvider = new ethers.BrowserProvider(provider);
-      const address = wallet.address;
+      const { provider: ethersProvider, address } = await getProviderAndSigner();
 
       const TokenABI = [
         { 
@@ -250,11 +461,16 @@ function App() {
       setCustomTokenBalance(null);
       setError(`Invalid token address: ${err.message}`);
     }
-  }, [wallet]);
+  }, [wallet, walletType, isWagmiConnected, getProviderAndSigner]);
 
   // Send Token (USDC or ERC20)
   const sendToken = async () => {
-    if (!authenticated || !wallet) {
+    // Check wallet connection based on walletType
+    if (walletType === 'metamask' && !isWagmiConnected) {
+      setError('Please connect MetaMask first');
+      return;
+    }
+    if (walletType === 'privy' && (!authenticated || !wallet)) {
       setError('Please login first');
       return;
     }
@@ -280,9 +496,7 @@ function App() {
     setResult(null);
 
     try {
-      const provider = await wallet.getEthereumProvider();
-      const ethersProvider = new ethers.BrowserProvider(provider);
-      const signer = await ethersProvider.getSigner();
+      const { signer } = await getProviderAndSigner();
 
       if (selectedToken === 'usdc') {
         // Send native USDC
@@ -381,20 +595,24 @@ function App() {
   // Load transaction history from Arcscan API - ONLY for the currently connected wallet
   // This only fetches transactions for the wallet that user is currently using (not all wallets)
   const loadTransactionHistory = useCallback(async () => {
-    // Only fetch if wallet is connected and user is authenticated
-    if (!wallet || !authenticated) {
+    // Check wallet connection
+    if (!activeAddress) {
+      setTransactions([]);
+      return;
+    }
+    
+    // For Privy, require authentication
+    if (walletType === 'privy' && !authenticated) {
       setTransactions([]);
       return;
     }
     
     setLoadingHistory(true);
     try {
-      // Get address of the CURRENTLY CONNECTED wallet only (not all wallets)
-      const connectedAddress = wallet.address;
-      console.log(`Fetching transaction history for connected wallet: ${connectedAddress}`);
+      console.log(`Fetching transaction history for connected wallet: ${activeAddress}`);
       
       // Arcscan API endpoint - only fetch transactions for this one address
-      const response = await fetch(`https://testnet.arcscan.app/api?module=account&action=txlist&address=${connectedAddress}&startblock=0&endblock=99999999&sort=desc`);
+      const response = await fetch(`https://testnet.arcscan.app/api?module=account&action=txlist&address=${activeAddress}&startblock=0&endblock=99999999&sort=desc`);
       const data = await response.json();
       
       if (data.status === '1' && data.result && Array.isArray(data.result)) {
@@ -407,16 +625,16 @@ function App() {
             to: tx.to,
             value: ethers.formatUnits(tx.value || '0', 18),
             timestamp: parseInt(tx.timeStamp),
-            type: tx.from.toLowerCase() === connectedAddress.toLowerCase() ? 'sent' : 'received',
+            type: tx.from.toLowerCase() === activeAddress.toLowerCase() ? 'sent' : 'received',
             tokenAddress: null,
             isTokenTransfer: tx.input && tx.input !== '0x' && tx.input.length > 10
           }))
           .slice(0, 30); // Limit to 30 most recent to save bandwidth
         
-        console.log(`Loaded ${formattedTxs.length} transactions for wallet ${connectedAddress}`);
+        console.log(`Loaded ${formattedTxs.length} transactions for wallet ${activeAddress}`);
         setTransactions(formattedTxs);
       } else {
-        console.log(`No transactions found for wallet ${connectedAddress}`);
+        console.log(`No transactions found for wallet ${activeAddress}`);
         setTransactions([]);
       }
     } catch (err: any) {
@@ -425,7 +643,7 @@ function App() {
     } finally {
       setLoadingHistory(false);
     }
-  }, [wallet, authenticated]);
+  }, [activeAddress, authenticated, walletType]);
 
   // Cache for token prices and pool existence to reduce RPC calls
   const tokenPriceCache = useRef<Map<string, { price: string | null; poolExists: boolean; timestamp: number }>>(new Map());
@@ -433,7 +651,9 @@ function App() {
 
   // Load all tokens from Registry (Marketplace)
   const loadAllTokens = useCallback(async () => {
-    if (!wallet || !authenticated) return;
+    // Check wallet connection
+    if (walletType === 'metamask' && !isWagmiConnected) return;
+    if (walletType === 'privy' && (!wallet || !authenticated)) return;
     
     const registryAddr = REGISTRY_ADDRESS || localStorage.getItem('registryAddress') || '';
     if (!registryAddr || !ethers.isAddress(registryAddr)) {
@@ -443,8 +663,7 @@ function App() {
 
     setLoadingMarketplace(true);
     try {
-      const provider = await wallet.getEthereumProvider();
-      const ethersProvider = new ethers.BrowserProvider(provider);
+      const { provider: ethersProvider } = await getProviderAndSigner();
       
       const registry = new ethers.Contract(registryAddr, REGISTRY_ABI, ethersProvider);
       
@@ -546,34 +765,45 @@ function App() {
     } finally {
       setLoadingMarketplace(false);
     }
-  }, [wallet, authenticated, deployedTokens, activeTab]);
+  }, [wallet, authenticated, deployedTokens, activeTab, walletType, isWagmiConnected, getProviderAndSigner]);
 
-  // Load history when tab is activated
+  // Load history when tab is activated or address changes
   useEffect(() => {
-    if (activeTab === 'history' && authenticated && wallet) {
+    if (activeTab === 'history' && activeAddress) {
+      if (walletType === 'privy' && !authenticated) return;
       loadTransactionHistory();
+    } else if (activeTab !== 'history') {
+      // Clear transactions when switching away from history tab to save memory
+      setTransactions([]);
     }
-  }, [activeTab, authenticated, wallet, loadTransactionHistory]);
+  }, [activeTab, activeAddress, authenticated, walletType, loadTransactionHistory]);
 
   // Load marketplace when tab is activated
   useEffect(() => {
-    if (activeTab === 'marketplace' && authenticated && wallet) {
+    if (activeTab === 'marketplace') {
+      if (walletType === 'metamask' && !isWagmiConnected) return;
+      if (walletType === 'privy' && (!authenticated || !wallet)) return;
       loadAllTokens();
     }
-  }, [activeTab, authenticated, wallet, loadAllTokens]);
+  }, [activeTab, authenticated, walletType, isWagmiConnected, wallet, loadAllTokens]);
   
 
   // Load token balances
   const loadTokenBalances = useCallback(async (tokens: DeployedToken[]) => {
-    if (!wallet || tokens.length === 0) {
-      console.log('Cannot load token balances: no wallet or no tokens');
+    // Check wallet connection
+    if (walletType === 'metamask' && !isWagmiConnected) {
+      return;
+    }
+    if (walletType === 'privy' && !wallet) {
+      return;
+    }
+    if (tokens.length === 0) {
+      console.log('Cannot load token balances: no tokens');
       return;
     }
     
     try {
-      const provider = await wallet.getEthereumProvider();
-      const ethersProvider = new ethers.BrowserProvider(provider);
-      const address = wallet.address;
+      const { provider: ethersProvider, address } = await getProviderAndSigner();
       
       const SimpleTokenABI = [
         { 
@@ -656,19 +886,19 @@ function App() {
     } catch (err: any) {
       console.error('Error loading token balances:', err);
     }
-  }, [wallet]);
+  }, [wallet, walletType, isWagmiConnected, getProviderAndSigner]);
 
   // Load deployed tokens from Registry (on-chain) or localStorage (fallback)
   const loadTokensFromRegistry = useCallback(async () => {
-    if (!wallet || !authenticated) return;
+    // Check wallet connection
+    if (walletType === 'metamask' && !isWagmiConnected) return;
+    if (walletType === 'privy' && (!wallet || !authenticated)) return;
     
     const registryAddr = REGISTRY_ADDRESS || localStorage.getItem('registryAddress') || '';
     
     if (registryAddr && ethers.isAddress(registryAddr)) {
       try {
-        const provider = await wallet.getEthereumProvider();
-        const ethersProvider = new ethers.BrowserProvider(provider);
-        const deployerAddress = wallet.address;
+        const { provider: ethersProvider, address: deployerAddress } = await getProviderAndSigner();
         
         const registry = new ethers.Contract(registryAddr, REGISTRY_ABI, ethersProvider);
         
@@ -822,6 +1052,13 @@ function App() {
     }
   }, [authenticated, wallet, loadBalance, switchToArcTestnet]);
 
+  // Reload balance when chain changes (for MetaMask network switching)
+  useEffect(() => {
+    if (wallet && walletType === 'metamask' && chain?.id) {
+      loadBalance();
+    }
+  }, [wallet, walletType, chain?.id, loadBalance]);
+
   // When user logs in, optionally disconnect external wallets if they want email-only mode
   // Note: This is optional - Privy supports multiple wallets simultaneously
   // Uncomment the code below if you want to auto-disconnect external wallets on email login
@@ -879,7 +1116,7 @@ function App() {
   }
 
   // Not authenticated - show login
-  if (!authenticated) {
+  if (!authenticated && !isWagmiConnected) {
     return (
       <div style={{ 
         minHeight: '100vh', 
@@ -942,6 +1179,7 @@ function App() {
             Token Launchpad & Trading Platform on Arc Blockchain
           </p>
 
+          {/* Privy Login Button */}
           <button 
             onClick={login}
             style={{ 
@@ -954,7 +1192,8 @@ function App() {
               cursor: 'pointer',
               fontWeight: 600,
               width: '100%',
-              transition: 'transform 0.2s'
+              transition: 'transform 0.2s',
+              marginBottom: '1rem'
             }}
             onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
@@ -965,9 +1204,73 @@ function App() {
           <p style={{ 
             fontSize: '0.9rem', 
             color: '#94a3b8', 
-            marginTop: '1.5rem'
+            marginBottom: '1.5rem'
           }}>
             Login with email, Google, or MetaMask
+          </p>
+
+          {/* Divider */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            margin: '1.5rem 0',
+            color: '#475569'
+          }}>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(71, 85, 105, 0.3)' }}></div>
+            <span style={{ padding: '0 1rem', fontSize: '0.85rem', color: '#64748b' }}>OR</span>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(71, 85, 105, 0.3)' }}></div>
+          </div>
+
+          {/* MetaMask Connect Button */}
+          <button 
+            onClick={async () => {
+              try {
+                const metaMaskConnector = connectors.find(c => 
+                  c.id === 'metaMaskSDK' || 
+                  c.id === 'io.metamask' || 
+                  c.name === 'MetaMask'
+                );
+                if (metaMaskConnector) {
+                  await wagmiConnect({ connector: metaMaskConnector });
+                } else {
+                  const injectedConnector = connectors.find(c => c.id === 'injected');
+                  if (injectedConnector) {
+                    await wagmiConnect({ connector: injectedConnector });
+                  }
+                }
+                setWalletType('metamask');
+              } catch (err) {
+                console.error('Error connecting MetaMask:', err);
+              }
+            }}
+            style={{ 
+              padding: '1rem 2rem', 
+              fontSize: '1.1rem',
+              background: 'linear-gradient(135deg, #f6851b 0%, #e2761b 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              width: '100%',
+              transition: 'transform 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            Connect MetaMask
+          </button>
+
+          <p style={{ 
+            fontSize: '0.85rem', 
+            color: '#64748b', 
+            marginTop: '1rem'
+          }}>
+            Connect directly with MetaMask wallet extension
           </p>
         </div>
       </div>
@@ -1013,7 +1316,7 @@ function App() {
         border: '1px solid rgba(71, 85, 105, 0.3)',
         boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
           <h1 style={{ 
             fontSize: '2.5rem', 
             marginBottom: '0.5rem',
@@ -1025,44 +1328,218 @@ function App() {
           }}>
             Arc Dex
           </h1>
-          <button
-            onClick={async () => {
-              // Try to disconnect MetaMask permissions before logout
-              if (window.ethereum && window.ethereum.isMetaMask) {
-                try {
-                  // Revoke MetaMask permissions
-                  await window.ethereum.request({
-                    method: 'wallet_revokePermissions',
-                    params: [{ eth_accounts: {} }],
-                  });
-                  console.log('MetaMask permissions revoked');
-                } catch (err: any) {
-                  // Ignore errors (user may have rejected or method not supported)
-                  console.log('MetaMask revoke optional:', err.message || err);
-                }
-              }
-              // Logout from Privy (this will disconnect all Privy-managed wallets)
-              await logout();
-            }}
-            style={{
-              padding: '0.5rem 1rem',
-              fontSize: '0.9rem',
-              background: 'rgba(71, 85, 105, 0.5)',
-              color: '#e2e8f0',
-              border: '1px solid rgba(71, 85, 105, 0.5)',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(71, 85, 105, 0.7)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(71, 85, 105, 0.5)';
-            }}
-          >
-            Logout
-          </button>
+          
+          {/* Wallet Selection & Connection */}
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Network Switcher - chỉ hiển thị khi MetaMask đã connect */}
+            {isWagmiConnected && chain && (
+              <select
+                value={chain.id}
+                onChange={async (e) => {
+                  const targetChainId = parseInt(e.target.value);
+                  try {
+                    await switchNetworkWithAutoAdd(targetChainId);
+                  } catch (err: any) {
+                    console.error('Error switching chain:', err);
+                    // Error already handled in switchNetworkWithAutoAdd
+                  }
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.85rem',
+                  background: 'rgba(30, 41, 59, 0.6)',
+                  color: '#e2e8f0',
+                  border: '1px solid rgba(71, 85, 105, 0.5)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  fontWeight: 500,
+                  minWidth: '150px',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(129, 140, 248, 0.6)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(71, 85, 105, 0.5)';
+                }}
+              >
+                {SUPPORTED_NETWORKS.map((network) => (
+                  <option key={network.id} value={network.id}>
+                    {network.shortName}{chain.id === network.id ? ' (Active)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* MetaMask Connection - chỉ hiển thị khi dùng MetaMask hoặc chưa login Privy */}
+            {(walletType === 'metamask' || !authenticated) && (
+              <>
+                {!isWagmiConnected ? (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const metaMaskConnector = connectors.find(c => 
+                          c.id === 'metaMaskSDK' || 
+                          c.id === 'io.metamask' || 
+                          c.name === 'MetaMask'
+                        );
+                        if (metaMaskConnector) {
+                          await wagmiConnect({ connector: metaMaskConnector });
+                        } else {
+                          const injectedConnector = connectors.find(c => c.id === 'injected');
+                          if (injectedConnector) {
+                            await wagmiConnect({ connector: injectedConnector });
+                          }
+                        }
+                        setWalletType('metamask');
+                      } catch (err) {
+                        console.error('Error connecting MetaMask:', err);
+                      }
+                    }}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      fontSize: '0.85rem',
+                      background: 'linear-gradient(135deg, #f6851b 0%, #e2761b 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      transition: 'transform 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    Connect MetaMask
+                  </button>
+                ) : (
+                  <div style={{
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.85rem',
+                    background: 'rgba(246, 133, 27, 0.2)',
+                    color: '#f6851b',
+                    border: '1px solid rgba(246, 133, 27, 0.4)',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    fontWeight: 600
+                  }}>
+                    MetaMask: {wagmiAddress?.slice(0, 6)}...{wagmiAddress?.slice(-4)}
+                    <button
+                      onClick={() => {
+                        wagmiDisconnect();
+                        if (authenticated && wallet) {
+                          setWalletType('privy');
+                        }
+                      }}
+                      style={{
+                        marginLeft: '0.5rem',
+                        padding: '0.25rem 0.5rem',
+                        fontSize: '0.75rem',
+                        background: 'rgba(239, 68, 68, 0.2)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Privy Wallet Status */}
+            {authenticated && wallet && (
+              <div style={{
+                padding: '0.5rem 1rem',
+                fontSize: '0.85rem',
+                background: walletType === 'privy' ? 'rgba(129, 140, 248, 0.2)' : 'rgba(71, 85, 105, 0.2)',
+                color: walletType === 'privy' ? '#a78bfa' : '#94a3b8',
+                border: `1px solid ${walletType === 'privy' ? 'rgba(129, 140, 248, 0.4)' : 'rgba(71, 85, 105, 0.4)'}`,
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontWeight: 600
+              }}>
+                Privy: {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                {walletType === 'privy' && (
+                  <span style={{ fontSize: '0.75rem', color: '#22c55e' }}>(Active)</span>
+                )}
+              </div>
+            )}
+
+            {/* Wallet Type Selector (if both connected) */}
+            {isWagmiConnected && authenticated && wallet && (
+              <select
+                value={walletType}
+                onChange={(e) => setWalletType(e.target.value as 'privy' | 'metamask')}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.85rem',
+                  background: 'rgba(30, 41, 59, 0.6)',
+                  color: '#e2e8f0',
+                  border: '1px solid rgba(71, 85, 105, 0.5)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+              >
+                <option value="metamask">Use MetaMask</option>
+                <option value="privy">Use Privy</option>
+              </select>
+            )}
+
+            {/* Logout Button - chỉ hiển thị khi đang dùng Privy */}
+            {authenticated && walletType === 'privy' && (
+              <button
+                onClick={async () => {
+                  // Disconnect MetaMask if connected
+                  if (isWagmiConnected) {
+                    wagmiDisconnect();
+                  }
+                  // Try to disconnect MetaMask permissions before logout
+                  if (window.ethereum && window.ethereum.isMetaMask) {
+                    try {
+                      await window.ethereum.request({
+                        method: 'wallet_revokePermissions',
+                        params: [{ eth_accounts: {} }],
+                      });
+                      console.log('MetaMask permissions revoked');
+                    } catch (err: any) {
+                      console.log('MetaMask revoke optional:', err.message || err);
+                    }
+                  }
+                  // Logout from Privy
+                  await logout();
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.9rem',
+                  background: 'rgba(71, 85, 105, 0.5)',
+                  color: '#e2e8f0',
+                  border: '1px solid rgba(71, 85, 105, 0.5)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(71, 85, 105, 0.7)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(71, 85, 105, 0.5)';
+                }}
+              >
+                Logout
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Tab Navigation */}
@@ -1226,11 +1703,40 @@ function App() {
           >
             Marketplace
           </button>
+          <button
+            onClick={() => setActiveTab('bridge')}
+            style={{
+              padding: '1rem 1.5rem',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              background: activeTab === 'bridge' ? 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)' : 'rgba(30, 41, 59, 0.6)',
+              color: activeTab === 'bridge' ? 'white' : '#cbd5e1',
+              border: 'none',
+              borderBottom: activeTab === 'bridge' ? '3px solid #818cf8' : '3px solid transparent',
+              borderRadius: '12px 12px 0 0',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              whiteSpace: 'nowrap',
+              boxShadow: activeTab === 'bridge' ? '0 4px 12px rgba(129, 140, 248, 0.3)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'bridge') {
+                e.currentTarget.style.background = 'rgba(51, 65, 85, 0.8)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'bridge') {
+                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+              }
+            }}
+          >
+            Bridge
+          </button>
         </div>
 
         {/* Tab Content */}
         <div>
-        {activeTab === 'balance' && wallet && (
+        {activeTab === 'balance' && (
           <div style={{ 
             padding: '2rem', 
             background: 'rgba(15, 23, 42, 0.4)',
@@ -1247,43 +1753,71 @@ function App() {
               boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
             }}>
               <div style={{ marginBottom: '1rem', fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Wallet Address
+                Active Wallet Address
               </div>
-              <div style={{ marginBottom: '0.5rem', fontSize: '0.75rem', color: wallet.walletClientType !== 'privy' ? '#22c55e' : '#f59e0b', fontWeight: 500 }}>
-                {wallet.walletClientType === 'privy' ? 'Embedded Wallet (Privy)' : `External Wallet (${wallet.walletClientType || 'Unknown'})`}
-              </div>
-              <div style={{ 
-                fontFamily: 'monospace', 
-                fontSize: '0.95rem',
-                wordBreak: 'break-all',
-                marginBottom: '1rem',
-                color: '#e2e8f0',
-                fontWeight: 500
-              }}>
-                {wallet.address}
-              </div>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(wallet.address);
-                  setError('');
-                  setTimeout(() => setError(''), 100);
-                }}
-                style={{
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.85rem',
-                  background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  transition: 'transform 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-              >
-                Copy Address
-              </button>
+              {(() => {
+                try {
+                  const activeWallet = getActiveWalletInfo();
+                  if (!activeWallet || !activeWallet.address) {
+                    return (
+                      <div style={{ color: '#fbbf24', fontSize: '0.9rem' }}>
+                        No wallet connected. Please connect MetaMask or login with Privy.
+                      </div>
+                    );
+                  }
+                  return (
+                    <>
+                      <div style={{ marginBottom: '0.5rem', fontSize: '0.75rem', color: activeWallet.type === 'metamask' ? '#f6851b' : '#a78bfa', fontWeight: 500 }}>
+                        {activeWallet.type === 'metamask' ? 'MetaMask Wallet' : activeWallet.name}
+                        {walletType === activeWallet.type && (
+                          <span style={{ marginLeft: '0.5rem', color: '#22c55e', fontSize: '0.7rem' }}>(Active)</span>
+                        )}
+                      </div>
+                      <div style={{ 
+                        fontFamily: 'monospace', 
+                        fontSize: '0.95rem',
+                        wordBreak: 'break-all',
+                        marginBottom: '1rem',
+                        color: '#e2e8f0',
+                        fontWeight: 500
+                      }}>
+                        {activeWallet.address}
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (activeWallet.address) {
+                            navigator.clipboard.writeText(activeWallet.address);
+                            setError('');
+                            setTimeout(() => setError(''), 100);
+                          }
+                        }}
+                        style={{
+                          padding: '0.5rem 1rem',
+                          fontSize: '0.85rem',
+                          background: 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          transition: 'transform 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      >
+                        Copy Address
+                      </button>
+                    </>
+                  );
+                } catch (err) {
+                  console.error('Error getting wallet info:', err);
+                  return (
+                    <div style={{ color: '#ef4444', fontSize: '0.9rem' }}>
+                      Error loading wallet information
+                    </div>
+                  );
+                }
+              })()}
             </div>
             
             <div style={{ 
@@ -1875,7 +2409,7 @@ function App() {
                           </div>
                           {token.poolExists && token.price && (
                             <div style={{ fontSize: '1rem', color: '#86efac', fontWeight: 700, marginBottom: '0.5rem', padding: '0.5rem', background: 'rgba(34, 197, 94, 0.15)', borderRadius: '8px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
-                              💰 Price: {parseFloat(token.price).toFixed(6)} USDC
+                              Price: {parseFloat(token.price).toFixed(6)} USDC
                             </div>
                           )}
                           {token.poolExists && !token.price && (
@@ -2168,6 +2702,35 @@ function App() {
             </div>
             )}
           </>
+        )}
+
+        {activeTab === 'bridge' && (
+          <div>
+            {/* Bridge Component */}
+            {walletType === 'metamask' && isWagmiConnected ? (
+              <CrossChainBridgeWithKit />
+            ) : walletType === 'privy' && wallet ? (
+              <CrossChainBridge />
+            ) : (
+              <div style={{
+                padding: '2rem',
+                background: 'rgba(15, 23, 42, 0.4)',
+                borderRadius: '16px',
+                border: '1px solid rgba(71, 85, 105, 0.2)',
+                textAlign: 'center',
+                color: '#94a3b8',
+              }}>
+                <div style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600, color: '#cbd5e1' }}>
+                  Connect a Wallet to Use Bridge
+                </div>
+                <div style={{ fontSize: '0.9rem' }}>
+                  {walletType === 'metamask' 
+                    ? 'Please connect MetaMask using the button in the header above.'
+                    : 'Please login with Privy or connect MetaMask using the buttons in the header above.'}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         <div style={{ 

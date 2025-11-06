@@ -36,6 +36,7 @@
     "concurrently": "^8.2.2"
   },
   "dependencies": {
+    "@circle-fin/bridge-kit": "^1.1.0",
     "solc": "^0.8.30"
   }
 }
