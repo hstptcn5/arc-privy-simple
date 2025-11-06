@@ -73,7 +73,7 @@ function App() {
   };
 
   // UI States
-  const [activeTab, setActiveTab] = useState<'balance' | 'send' | 'deploy' | 'history' | 'marketplace' | 'bridge' | 'batch'>('balance');
+  const [activeTab, setActiveTab] = useState<'balance' | 'send' | 'deploy' | 'history' | 'marketplace' | 'bridge' | 'batch' | 'invoices'>('balance');
   
   // History states
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -121,6 +121,36 @@ function App() {
   // Multisend contract state
   const [multisendAddress, setMultisendAddress] = useState<string>(() => localStorage.getItem('multisendAddress') || '');
   const [isDeployingMultisend, setIsDeployingMultisend] = useState(false);
+  
+  // Invoice/Payment Request states
+  interface Invoice {
+    id: string;
+    title: string;
+    description: string;
+    amount: string;
+    token: 'usdc' | string; // token address or 'usdc'
+    tokenSymbol: string;
+    recipientAddress: string; // who should receive payment
+    createdAt: number;
+    expiresAt?: number; // optional expiry timestamp
+    status: 'pending' | 'paid' | 'expired';
+    paidTxHash?: string;
+    paidAt?: number;
+  }
+  
+  const [invoices, setInvoices] = useState<Invoice[]>(() => {
+    const saved = localStorage.getItem('invoices');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [newInvoice, setNewInvoice] = useState({
+    title: '',
+    description: '',
+    amount: '',
+    token: 'usdc' as 'usdc' | string,
+    expiresInDays: ''
+  });
+  const [invoiceTokenInfo, setInvoiceTokenInfo] = useState<{name: string, symbol: string, decimals: number} | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   // Get wallet - prioritize external wallets (MetaMask, etc.) over embedded wallet
   // External wallets have walletClientType like 'metamask', 'walletconnect', etc.
@@ -914,6 +944,163 @@ function App() {
       setBatchLoading(false);
     }
   };
+
+  // Create new invoice/payment request
+  const createInvoice = useCallback(async () => {
+    if (!activeAddress) {
+      alert('Please connect wallet first');
+      return;
+    }
+
+    if (!newInvoice.title || !newInvoice.amount) {
+      alert('Please fill in title and amount');
+      return;
+    }
+
+    const amountNum = parseFloat(newInvoice.amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      alert('Invalid amount');
+      return;
+    }
+
+    // Determine token info
+    let tokenSymbol = 'USDC';
+    if (newInvoice.token !== 'usdc') {
+      if (newInvoice.token === 'custom' && !invoiceTokenInfo) {
+        alert('Please load custom token info first');
+        return;
+      }
+      const token = deployedTokens.find(t => t.address === newInvoice.token);
+      if (!token && !invoiceTokenInfo) {
+        alert('Token not found');
+        return;
+      }
+      tokenSymbol = token?.symbol || invoiceTokenInfo?.symbol || 'TOKEN';
+    }
+
+    // Generate unique invoice ID
+    const invoiceId = `inv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Calculate expiry
+    const expiresAt = newInvoice.expiresInDays 
+      ? Date.now() + (parseInt(newInvoice.expiresInDays) * 24 * 60 * 60 * 1000)
+      : undefined;
+
+    const invoice: Invoice = {
+      id: invoiceId,
+      title: newInvoice.title,
+      description: newInvoice.description || '',
+      amount: newInvoice.amount,
+      token: newInvoice.token,
+      tokenSymbol,
+      recipientAddress: activeAddress,
+      createdAt: Date.now(),
+      expiresAt,
+      status: 'pending'
+    };
+
+    const updatedInvoices = [invoice, ...invoices];
+    setInvoices(updatedInvoices);
+    localStorage.setItem('invoices', JSON.stringify(updatedInvoices));
+    
+    // Reset form
+    setNewInvoice({
+      title: '',
+      description: '',
+      amount: '',
+      token: 'usdc',
+      expiresInDays: ''
+    });
+    setInvoiceTokenInfo(null);
+    
+    // Select the new invoice to show shareable link
+    setSelectedInvoice(invoice);
+  }, [activeAddress, newInvoice, invoiceTokenInfo, deployedTokens, invoices]);
+
+  // Check invoice payment status by monitoring on-chain transactions
+  const checkInvoicePayment = useCallback(async (invoice: Invoice) => {
+    try {
+      // Check if expired
+      if (invoice.expiresAt && Date.now() > invoice.expiresAt) {
+        if (invoice.status !== 'expired') {
+          const updated = invoices.map(inv => 
+            inv.id === invoice.id ? { ...inv, status: 'expired' as const } : inv
+          );
+          setInvoices(updated);
+          localStorage.setItem('invoices', JSON.stringify(updated));
+        }
+        return;
+      }
+
+      // Check Arcscan API for recent transactions to recipient address
+      const response = await fetch(
+        `https://testnet.arcscan.app/api?module=account&action=txlist&address=${invoice.recipientAddress}&startblock=0&endblock=99999999&sort=desc&page=1&offset=10`
+      );
+      const data = await response.json();
+
+      if (data.status === '1' && data.result && Array.isArray(data.result)) {
+        // Check if any transaction matches invoice amount and token
+        for (const tx of data.result) {
+          // Check if transaction is after invoice creation
+          if (parseInt(tx.timeStamp) * 1000 < invoice.createdAt) continue;
+
+          // For native USDC
+          if (invoice.token === 'usdc') {
+            const amountWei = ethers.parseUnits(invoice.amount, USDC_NATIVE_DECIMALS);
+            const txValue = BigInt(tx.value || '0');
+            // Allow small tolerance (0.1% difference)
+            const tolerance = amountWei * BigInt(999) / BigInt(1000);
+            if (txValue >= tolerance && tx.to?.toLowerCase() === invoice.recipientAddress.toLowerCase()) {
+              // Payment found!
+              const updated = invoices.map(inv => 
+                inv.id === invoice.id 
+                  ? { ...inv, status: 'paid' as const, paidTxHash: tx.hash, paidAt: parseInt(tx.timeStamp) * 1000 }
+                  : inv
+              );
+              setInvoices(updated);
+              localStorage.setItem('invoices', JSON.stringify(updated));
+              return;
+            }
+          }
+          // TODO: Add ERC20 token payment checking if needed
+        }
+      }
+    } catch (err: any) {
+      console.error('Error checking invoice payment:', err);
+    }
+  }, [invoices]);
+
+  // Monitor all pending invoices periodically
+  useEffect(() => {
+    if (activeTab !== 'invoices') return;
+
+    const interval = setInterval(() => {
+      invoices.filter(inv => inv.status === 'pending').forEach(invoice => {
+        checkInvoicePayment(invoice);
+      });
+    }, 5000); // Check every 5 seconds (Arc's sub-second finality makes this fast!)
+
+    return () => clearInterval(interval);
+  }, [activeTab, invoices, checkInvoicePayment]);
+
+  // Generate shareable link for invoice
+  const getInvoiceLink = useCallback((invoice: Invoice) => {
+    const baseUrl = window.location.origin + window.location.pathname;
+    return `${baseUrl}?invoice=${invoice.id}`;
+  }, []);
+
+  // Load invoice from URL parameter
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const invoiceId = urlParams.get('invoice');
+    if (invoiceId) {
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      if (invoice) {
+        setSelectedInvoice(invoice);
+        setActiveTab('invoices');
+      }
+    }
+  }, [invoices]);
 
   // Load transaction history from Arcscan API - ONLY for the currently connected wallet
   // This only fetches transactions for the wallet that user is currently using (not all wallets)
@@ -2083,6 +2270,35 @@ function App() {
             }}
           >
             Batch
+          </button>
+          <button
+            onClick={() => setActiveTab('invoices')}
+            style={{
+              padding: '1rem 1.5rem',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              background: activeTab === 'invoices' ? 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)' : 'rgba(30, 41, 59, 0.6)',
+              color: activeTab === 'invoices' ? 'white' : '#cbd5e1',
+              border: 'none',
+              borderBottom: activeTab === 'invoices' ? '3px solid #818cf8' : '3px solid transparent',
+              borderRadius: '12px 12px 0 0',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              whiteSpace: 'nowrap',
+              boxShadow: activeTab === 'invoices' ? '0 4px 12px rgba(129, 140, 248, 0.3)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'invoices') {
+                e.currentTarget.style.background = 'rgba(51, 65, 85, 0.8)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'invoices') {
+                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+              }
+            }}
+          >
+            Invoices
           </button>
         </div>
 
@@ -3589,6 +3805,521 @@ function App() {
                   {walletType === 'metamask' 
                     ? 'Please connect MetaMask using the button in the header above.'
                     : 'Please login with Privy or connect MetaMask using the buttons in the header above.'}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'invoices' && (
+          <div style={{ padding: '2rem', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.2)' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '1rem' }}>
+              Payment Requests / Invoices
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: '#94a3b8', marginBottom: '2rem' }}>
+              Create shareable payment requests. Perfect for remittances, marketplaces, and trade finance.
+            </p>
+
+            {!selectedInvoice ? (
+              <>
+                {/* Create New Invoice */}
+                <div style={{ marginBottom: '2rem', padding: '1.5rem', background: 'rgba(129, 140, 248, 0.1)', borderRadius: '12px', border: '1px solid rgba(129, 140, 248, 0.2)' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '1rem' }}>
+                    Create New Invoice
+                  </h3>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
+                      Title:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Payment for Services"
+                      value={newInvoice.title}
+                      onChange={(e) => setNewInvoice({ ...newInvoice, title: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        fontSize: '1rem',
+                        border: '2px solid rgba(71, 85, 105, 0.5)',
+                        borderRadius: '8px',
+                        outline: 'none',
+                        background: 'rgba(30, 41, 59, 0.6)',
+                        color: '#e2e8f0'
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
+                      Description (optional):
+                    </label>
+                    <textarea
+                      placeholder="Additional details about the payment..."
+                      value={newInvoice.description}
+                      onChange={(e) => setNewInvoice({ ...newInvoice, description: e.target.value })}
+                      rows={3}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        fontSize: '0.9rem',
+                        border: '2px solid rgba(71, 85, 105, 0.5)',
+                        borderRadius: '8px',
+                        outline: 'none',
+                        background: 'rgba(30, 41, 59, 0.6)',
+                        color: '#e2e8f0',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
+                        Amount:
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="0.0"
+                        value={newInvoice.amount}
+                        onChange={(e) => setNewInvoice({ ...newInvoice, amount: e.target.value })}
+                        min="0.000001"
+                        step="0.000001"
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          fontSize: '1rem',
+                          border: '2px solid rgba(71, 85, 105, 0.5)',
+                          borderRadius: '8px',
+                          outline: 'none',
+                          background: 'rgba(30, 41, 59, 0.6)',
+                          color: '#e2e8f0'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
+                        Token:
+                      </label>
+                      <select
+                        value={newInvoice.token}
+                        onChange={(e) => {
+                          setNewInvoice({ ...newInvoice, token: e.target.value });
+                          setInvoiceTokenInfo(null);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          fontSize: '1rem',
+                          border: '2px solid rgba(71, 85, 105, 0.5)',
+                          borderRadius: '8px',
+                          outline: 'none',
+                          background: 'rgba(30, 41, 59, 0.6)',
+                          color: '#e2e8f0'
+                        }}
+                      >
+                        <option value="usdc">USDC (Native)</option>
+                        {deployedTokens.map((token) => (
+                          <option key={token.address} value={token.address}>
+                            {token.name} ({token.symbol})
+                          </option>
+                        ))}
+                        <option value="custom">Custom ERC20</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {newInvoice.token === 'custom' && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
+                        Token Contract Address:
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="0x..."
+                        onChange={async (e) => {
+                          if (e.target.value && ethers.isAddress(e.target.value)) {
+                            try {
+                              const { provider } = await getProviderAndSigner();
+                              const ERC20_ABI_FULL = [
+                                { constant: true, inputs: [], name: 'name', outputs: [{ name: '', type: 'string' }], type: 'function' },
+                                { constant: true, inputs: [], name: 'symbol', outputs: [{ name: '', type: 'string' }], type: 'function' },
+                                { constant: true, inputs: [], name: 'decimals', outputs: [{ name: '', type: 'uint8' }], type: 'function' }
+                              ];
+                              const contract = new ethers.Contract(e.target.value, ERC20_ABI_FULL, provider);
+                              const [name, symbol, decimals] = await Promise.all([
+                                contract.name(),
+                                contract.symbol(),
+                                contract.decimals()
+                              ]);
+                              setInvoiceTokenInfo({ name, symbol, decimals: Number(decimals) });
+                            } catch (err: any) {
+                              console.error('Error loading token info:', err);
+                              setInvoiceTokenInfo(null);
+                            }
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          fontSize: '0.9rem',
+                          fontFamily: 'monospace',
+                          border: '2px solid rgba(71, 85, 105, 0.5)',
+                          borderRadius: '8px',
+                          outline: 'none',
+                          background: 'rgba(30, 41, 59, 0.6)',
+                          color: '#e2e8f0'
+                        }}
+                      />
+                      {invoiceTokenInfo && (
+                        <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(129, 140, 248, 0.15)', borderRadius: '6px', fontSize: '0.85rem' }}>
+                          {invoiceTokenInfo.name} ({invoiceTokenInfo.symbol})
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
+                      Expires in (days, optional):
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Leave empty for no expiry"
+                      value={newInvoice.expiresInDays}
+                      onChange={(e) => setNewInvoice({ ...newInvoice, expiresInDays: e.target.value })}
+                      min="1"
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        fontSize: '1rem',
+                        border: '2px solid rgba(71, 85, 105, 0.5)',
+                        borderRadius: '8px',
+                        outline: 'none',
+                        background: 'rgba(30, 41, 59, 0.6)',
+                        color: '#e2e8f0'
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    onClick={createInvoice}
+                    disabled={!activeAddress || !newInvoice.title || !newInvoice.amount}
+                    style={{
+                      width: '100%',
+                      padding: '1rem',
+                      fontSize: '1.1rem',
+                      background: (!activeAddress || !newInvoice.title || !newInvoice.amount)
+                        ? 'rgba(71, 85, 105, 0.5)'
+                        : 'linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: (!activeAddress || !newInvoice.title || !newInvoice.amount) ? 'not-allowed' : 'pointer',
+                      fontWeight: 600
+                    }}
+                  >
+                    Create Invoice
+                  </button>
+                </div>
+
+                {/* Invoice List */}
+                <div>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '1rem' }}>
+                    Your Invoices ({invoices.length})
+                  </h3>
+
+                  {invoices.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+                      No invoices yet. Create your first payment request above.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: '1rem' }}>
+                      {invoices.map((invoice) => (
+                        <div
+                          key={invoice.id}
+                          onClick={() => setSelectedInvoice(invoice)}
+                          style={{
+                            padding: '1.5rem',
+                            background: invoice.status === 'paid' 
+                              ? 'rgba(34, 197, 94, 0.1)'
+                              : invoice.status === 'expired'
+                              ? 'rgba(239, 68, 68, 0.1)'
+                              : 'rgba(30, 41, 59, 0.6)',
+                            border: `1px solid ${
+                              invoice.status === 'paid'
+                                ? 'rgba(34, 197, 94, 0.3)'
+                                : invoice.status === 'expired'
+                                ? 'rgba(239, 68, 68, 0.3)'
+                                : 'rgba(71, 85, 105, 0.3)'
+                            }`,
+                            borderRadius: '12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(129, 140, 248, 0.2)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = 'none';
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '1.1rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.25rem' }}>
+                                {invoice.title}
+                              </div>
+                              {invoice.description && (
+                                <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '0.5rem' }}>
+                                  {invoice.description}
+                                </div>
+                              )}
+                              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#a78bfa', marginBottom: '0.5rem' }}>
+                                {invoice.amount} {invoice.tokenSymbol}
+                              </div>
+                              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                Created: {new Date(invoice.createdAt).toLocaleString()}
+                                {invoice.expiresAt && (
+                                  <> • Expires: {new Date(invoice.expiresAt).toLocaleString()}</>
+                                )}
+                              </div>
+                            </div>
+                            <div style={{
+                              padding: '0.5rem 1rem',
+                              borderRadius: '8px',
+                              fontSize: '0.85rem',
+                              fontWeight: 600,
+                              background: invoice.status === 'paid'
+                                ? 'rgba(34, 197, 94, 0.2)'
+                                : invoice.status === 'expired'
+                                ? 'rgba(239, 68, 68, 0.2)'
+                                : 'rgba(251, 191, 36, 0.2)',
+                              color: invoice.status === 'paid'
+                                ? '#86efac'
+                                : invoice.status === 'expired'
+                                ? '#fca5a5'
+                                : '#fbbf24'
+                            }}>
+                              {invoice.status.toUpperCase()}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* Invoice Detail View */
+              <div>
+                <button
+                  onClick={() => setSelectedInvoice(null)}
+                  style={{
+                    marginBottom: '1rem',
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.9rem',
+                    background: 'rgba(71, 85, 105, 0.5)',
+                    color: '#e2e8f0',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ← Back to List
+                </button>
+
+                <div style={{
+                  padding: '2rem',
+                  background: selectedInvoice.status === 'paid'
+                    ? 'rgba(34, 197, 94, 0.1)'
+                    : selectedInvoice.status === 'expired'
+                    ? 'rgba(239, 68, 68, 0.1)'
+                    : 'rgba(129, 140, 248, 0.1)',
+                  border: `2px solid ${
+                    selectedInvoice.status === 'paid'
+                      ? 'rgba(34, 197, 94, 0.3)'
+                      : selectedInvoice.status === 'expired'
+                      ? 'rgba(239, 68, 68, 0.3)'
+                      : 'rgba(129, 140, 248, 0.3)'
+                  }`,
+                  borderRadius: '12px',
+                  marginBottom: '1.5rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
+                    <div>
+                      <h3 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#e2e8f0', marginBottom: '0.5rem' }}>
+                        {selectedInvoice.title}
+                      </h3>
+                      <div style={{
+                        display: 'inline-block',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '8px',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        background: selectedInvoice.status === 'paid'
+                          ? 'rgba(34, 197, 94, 0.2)'
+                          : selectedInvoice.status === 'expired'
+                          ? 'rgba(239, 68, 68, 0.2)'
+                          : 'rgba(251, 191, 36, 0.2)',
+                        color: selectedInvoice.status === 'paid'
+                          ? '#86efac'
+                          : selectedInvoice.status === 'expired'
+                          ? '#fca5a5'
+                          : '#fbbf24'
+                      }}>
+                        {selectedInvoice.status.toUpperCase()}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '2rem', fontWeight: 700, color: '#a78bfa' }}>
+                        {selectedInvoice.amount} {selectedInvoice.tokenSymbol}
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedInvoice.description && (
+                    <div style={{ marginBottom: '1rem', padding: '1rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '8px', color: '#cbd5e1' }}>
+                      {selectedInvoice.description}
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '1rem' }}>
+                    <div>Recipient: {selectedInvoice.recipientAddress.slice(0, 10)}...{selectedInvoice.recipientAddress.slice(-8)}</div>
+                    <div>Created: {new Date(selectedInvoice.createdAt).toLocaleString()}</div>
+                    {selectedInvoice.expiresAt && (
+                      <div>Expires: {new Date(selectedInvoice.expiresAt).toLocaleString()}</div>
+                    )}
+                    {selectedInvoice.paidTxHash && (
+                      <div style={{ marginTop: '0.5rem', color: '#86efac' }}>
+                        Paid: {new Date(selectedInvoice.paidAt!).toLocaleString()}
+                        <br />
+                        <a
+                          href={`https://testnet.arcscan.app/tx/${selectedInvoice.paidTxHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#818cf8', textDecoration: 'underline' }}
+                        >
+                          View Transaction
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Shareable Link */}
+                  <div style={{ marginBottom: '1rem', padding: '1rem', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '8px' }}>
+                    <label style={{ display: 'block', fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.5rem', fontWeight: 600 }}>
+                      Shareable Link:
+                    </label>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <input
+                        type="text"
+                        readOnly
+                        value={getInvoiceLink(selectedInvoice)}
+                        style={{
+                          flex: 1,
+                          padding: '0.75rem',
+                          fontSize: '0.85rem',
+                          fontFamily: 'monospace',
+                          border: '2px solid rgba(71, 85, 105, 0.5)',
+                          borderRadius: '8px',
+                          background: 'rgba(30, 41, 59, 0.6)',
+                          color: '#e2e8f0'
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(getInvoiceLink(selectedInvoice));
+                          alert('Link copied to clipboard!');
+                        }}
+                        style={{
+                          padding: '0.75rem 1rem',
+                          fontSize: '0.85rem',
+                          background: 'rgba(129, 140, 248, 0.2)',
+                          color: '#a78bfa',
+                          border: '1px solid rgba(129, 140, 248, 0.3)',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* QR Code (using URL-based approach) */}
+                  <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+                    <div style={{ 
+                      display: 'inline-block',
+                      padding: '1rem',
+                      background: 'white',
+                      borderRadius: '8px'
+                    }}>
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getInvoiceLink(selectedInvoice))}`}
+                        alt="Invoice QR Code"
+                        style={{ width: '200px', height: '200px' }}
+                      />
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
+                      Scan to open payment link
+                    </div>
+                  </div>
+
+                  {/* Quick Pay Button (for recipient) */}
+                  {selectedInvoice.status === 'pending' && activeAddress && activeAddress.toLowerCase() !== selectedInvoice.recipientAddress.toLowerCase() && (
+                    <button
+                      onClick={async () => {
+                        // Pre-fill send form with invoice data
+                        setSendToAddress(selectedInvoice.recipientAddress);
+                        setAmount(selectedInvoice.amount);
+                        setSelectedToken(selectedInvoice.token);
+                        
+                        // Wait a bit for state to update, then trigger send
+                        setTimeout(async () => {
+                          // Check if we need custom token info for ERC20
+                          if (selectedInvoice.token === 'custom') {
+                            alert('Custom token payment from invoice requires token address. Please use Send tab.');
+                            setActiveTab('send');
+                            return;
+                          }
+                          
+                          // For deployed tokens, ensure token info is available
+                          if (selectedInvoice.token !== 'usdc') {
+                            const token = deployedTokens.find(t => t.address === selectedInvoice.token);
+                            if (!token) {
+                              alert('Token not found. Please use Send tab.');
+                              setActiveTab('send');
+                              return;
+                            }
+                          }
+                          
+                          // Navigate to send tab first
+                          setActiveTab('send');
+                          
+                          // Wait a bit more for tab switch, then trigger send
+                          setTimeout(async () => {
+                            await sendToken();
+                          }, 300);
+                        }, 100);
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '1rem',
+                        fontSize: '1.1rem',
+                        background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}
+                    >
+                      Pay {selectedInvoice.amount} {selectedInvoice.tokenSymbol}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
