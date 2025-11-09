@@ -1,12 +1,12 @@
 # Arc Dex - Token Launchpad & Trading Platform
 
-A comprehensive decentralized exchange (DEX) application for deploying, managing, and trading ERC-20 tokens on Arc Testnet with Automated Market Maker (AMM) and on-chain token registry.
+A comprehensive decentralized exchange (DEX) application for deploying, managing, and trading ERC-20 tokens on Arc Testnet with Automated Market Maker (AMM), on-chain token registry, and invoice-based payment flows.
 
 **Live Demo**: [https://arc-privy-simple-backend.vercel.app/](https://arc-privy-simple-backend.vercel.app/)
 
 ## Overview
 
-Arc Dex is a complete Web3 DEX platform that enables users to deploy custom ERC-20 tokens, create liquidity pools, trade tokens through Automated Market Makers, and manage their token portfolio all in one interface. The platform features real-time price charts, an on-chain token registry, and seamless wallet integration for both crypto-native and non-crypto users.
+Arc Dex is a complete Web3 DEX platform that enables users to deploy custom ERC-20 tokens, create liquidity pools, execute batch transfers, trade tokens through Automated Market Makers, and manage both their portfolio and invoicing workflows in one interface. The platform features real-time price charts, an on-chain token registry, and seamless wallet integration for both crypto-native and non-crypto users.
 
 ### Key Capabilities
 
@@ -16,6 +16,8 @@ Arc Dex is a complete Web3 DEX platform that enables users to deploy custom ERC-
 - Manage token portfolio and transaction history
 - Browse decentralized token marketplace
 - Send and receive tokens (native USDC and ERC-20)
+- Create, track, and share on-chain invoices with optional pay-per-link flows
+- Execute multi-recipient batch transfers with smart gas management and status reporting
 
 ## Architecture
 
@@ -93,6 +95,21 @@ Arc Dex is a complete Web3 DEX platform that enables users to deploy custom ERC-
 - Ownership highlighting for user's tokens
 - Direct links to Arcscan for contract verification
 - Token detail pages with trading interface
+- Publish public payment links by generating invoices directly from the dashboard
+
+### On-chain Invoicing & Payments
+- Generate professional invoices with token selection, discounts, and tax inputs
+- Support both public invoices (anyone with the link can pay) and private invoices (restricted recipient address)
+- Automatically track invoice lifecycle (pending, paid, expired) using smart contract events
+- Seamless wallet prompts for payers to settle invoices in native USDC or configured ERC-20 tokens
+- Export invoice data for accounting and share payment links with clients instantly
+
+### Batch Transfers
+- Upload or compose multi-recipient payout lists directly in the dashboard
+- Support for native USDC and any registered ERC-20 tokens with automatic decimal handling
+- Pre-flight validation to catch duplicate addresses, malformed inputs, and insufficient balances
+- Aggregate transaction submission that optimizes gas usage while providing per-recipient status
+- Detailed completion summary with downloadable CSV for reconciliation
 
 ### Token Wallet & Management
 - View balances for native USDC and all deployed tokens
